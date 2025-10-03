@@ -1,75 +1,123 @@
-# 📝 TodoApp - Gestor de Tareas Empresarial en Kubernetes
+# 📝 TodoApp - Gestor de Tareas Cloud Native en Kubernetes
 
-## � Descripción
+## 📖 Descripción
 
-**TodoApp** es una aplicación web moderna de gestión de tareas desarrollada con arquitectura de microservicios, desplegada en Kubernetes utilizando las mejores prácticas de la industria. La aplicación permite a los usuarios crear, gestionar, completar y eliminar tareas de manera eficiente, proporcionando una interfaz web intuitiva respaldada por una API REST robusta y una base de datos PostgreSQL persistente.
+**TodoApp** es una aplicación web moderna de gestión de tareas desarrollada con arquitectura de microservicios, desplegada completamente en **Kubernetes usando Kind**. La aplicación permite a los usuarios crear, gestionar, completar y eliminar tareas de manera eficiente, proporcionando una interfaz web intuitiva respaldada por una API REST robusta y una base de datos PostgreSQL persistente.
 
-### 🎯 Características Principales
+La aplicación está diseñada siguiendo las mejores prácticas de **Cloud Native** y **DevOps**, utilizando contenedores Docker orquestados por Kubernetes, gestión declarativa con Helm, y observabilidad completa con Prometheus y Grafana.
 
-- ✅ **Interfaz moderna**: Frontend React con diseño responsivo
-- ✅ **API REST completa**: Backend Node.js/Express con operaciones CRUD
-- ✅ **Persistencia garantizada**: Base de datos PostgreSQL con volúmenes persistentes
-- ✅ **Arquitectura en contenedores**: Microservicios independientes y escalables
-- ✅ **Orquestación profesional**: Despliegue en Kubernetes con Helm
-- ✅ **Monitoreo avanzado**: Observabilidad completa con Prometheus y Grafana
-- ✅ **Alta disponibilidad**: Múltiples réplicas y autorecuperación
+### 🎯 Características Cloud Native
 
-### 🌐 URLs de Acceso
+- ✅ **Arquitectura Cloud Native**: Microservicios en Kubernetes con alta disponibilidad
+- ✅ **Interfaz moderna**: Frontend React optimizado servido por Nginx
+- ✅ **API REST robusta**: Backend Node.js/Express con health checks y métricas
+- ✅ **Persistencia garantizada**: PostgreSQL con PersistentVolumes de Kubernetes
+- ✅ **Orquestación profesional**: Despliegue declarativo con Helm Charts
+- ✅ **Observabilidad completa**: Monitoreo en tiempo real con Prometheus y Grafana
+- ✅ **Alta disponibilidad**: Múltiples réplicas con load balancing automático
+- ✅ **Autorecuperación**: Self-healing y rolling updates sin downtime
+- ✅ **Escalabilidad horizontal**: HPA (Horizontal Pod Autoscaling) configurado
+- ✅ **Gestión de configuración**: ConfigMaps y Secrets de Kubernetes
+- ✅ **Service Discovery**: Comunicación automática entre microservicios
+- ✅ **Tolerancia a fallos**: Circuit breakers y retry mechanisms
 
-| Servicio | URL | Credenciales |
-|----------|-----|--------------|
-| **Frontend Web** | http://localhost:30000 | - |
-| **API REST** | http://localhost:30001 | - |
-| **Grafana (Monitoreo)** | http://localhost:30002 | admin/admin123 |
-| **Prometheus** | http://localhost:9091 | - |
+### 🔧 Stack Tecnológico
+
+| Componente | Tecnología | Versión | Propósito |
+|------------|------------|---------|-----------|
+| **Orquestación** | Kubernetes (Kind) | v1.34.0 | Gestión de contenedores y servicios |
+| **Gestión de Apps** | Helm | v3.x | Despliegues declarativos y templating |
+| **Frontend** | React + Nginx | 18.2.0 + Alpine | Interfaz de usuario responsiva |
+| **Backend** | Node.js + Express | 18.x | API REST y lógica de negocio |
+| **Base de Datos** | PostgreSQL | 15 Alpine | Persistencia de datos transaccional |
+| **Monitoreo** | Prometheus + Grafana | Latest | Observabilidad y alertas |
+| **Contenedores** | Docker | 28.x | Empaquetado de aplicaciones |
+| **Storage** | Local Path Provisioner | Latest | Volúmenes persistentes |
+
+### 🌐 Endpoints de Acceso
+
+| Servicio | URL | Credenciales | Descripción |
+|----------|-----|--------------|-------------|
+| **Frontend Web** | http://localhost:30000 | - | Interfaz principal de usuario |
+| **API REST** | http://localhost:30001 | - | Endpoints de backend |
+| **Health Check** | http://localhost:30001/health | - | Estado del backend |
+| **Grafana** | http://localhost:30002 | admin/admin123 | Dashboards de monitoreo |
+| **Prometheus** | http://localhost:9091 | - | Métricas y alertas |
 
 ---
 
-## 🏗️ Descripción de Microservicios
+## 🏗️ Arquitectura de Microservicios en Kubernetes
 
-La aplicación TodoApp está diseñada siguiendo principios de microservicios, lo que garantiza escalabilidad, mantenibilidad y tolerancia a fallos.
+TodoApp está implementada usando principios de microservicios en Kubernetes, garantizando escalabilidad, mantenibilidad y tolerancia a fallos.
 
 ### 🎯 Frontend Service (React + Nginx)
 
 **Tecnología**: React 18 + Nginx Alpine
 ```yaml
+Namespace: todoapp
+Deployment: todoapp-frontend
 Réplicas: 2 (Alta Disponibilidad)
 Recursos: 100m CPU, 128Mi RAM por réplica
-Puerto: 3000 (Expuesto como NodePort 30000)
+Service: ClusterIP + NodePort 30000
 ```
 
-**Responsabilidades**:
-- 🖥️ Interfaz de usuario responsiva
-- 🔄 Gestión de estado local (React Hooks)
-- 🌐 Comunicación con API backend
-- 📱 Experiencia de usuario optimizada
+**Características Kubernetes**:
+- 🔄 **Rolling Updates**: Actualizaciones sin downtime
+- ⚖️ **Load Balancing**: Tráfico distribuido automáticamente por Kubernetes Service
+- 🛡️ **Health Checks**: Liveness y Readiness probes configurados
+- 🔄 **Self-Healing**: Pods recreados automáticamente si fallan
+- 📊 **HPA Ready**: Escalado horizontal basado en CPU
+- 🏷️ **Labels & Selectors**: Gestión declarativa con etiquetas Kubernetes
 
-**Escalabilidad**:
-- **Horizontal**: Autoescalado basado en CPU (HPA)
-- **Stateless**: Sin persistencia local, permitiendo escalado ilimitado
-- **CDN Ready**: Archivos estáticos servidos por Nginx optimizado
-- **Load Balancing**: Kubernetes distribuye tráfico automáticamente
+**Configuración Kubernetes**:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todoapp-frontend
+  namespace: todoapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: todoapp-frontend
+  template:
+    spec:
+      containers:
+      - name: frontend
+        image: todoapp-frontend:latest
+        ports:
+        - containerPort: 3000
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+```
 
 ### 🔧 Backend Service (Node.js/Express)
 
 **Tecnología**: Node.js 18 + Express
 ```yaml
+Namespace: todoapp
+Deployment: todoapp-backend
 Réplicas: 2 (Balanceador de carga)
 Recursos: 200m CPU, 256Mi RAM por réplica
-Puerto: 5000 (Expuesto como NodePort 30001)
+Service: ClusterIP + NodePort 30001
+ConfigMap: Backend configuration
+Secret: Database credentials
 ```
 
-**Responsabilidades**:
-- 📡 API REST con endpoints CRUD
-- 🔐 Validación de datos y lógica de negocio
-- 🗄️ Gestión de conexiones a base de datos
-- 📊 Exposición de métricas para monitoreo
-
-**Escalabilidad**:
-- **Horizontal**: Escalado automático basado en requests/CPU
-- **Stateless**: Conexiones de BD pooled, sin sesiones locales
-- **Circuit Breaker**: Tolerancia a fallos en conexiones BD
-- **Health Checks**: Autorecuperación ante fallos
+**Características Kubernetes**:
+- 🔐 **ConfigMaps**: Configuración externalizada y versionada
+- 🔑 **Secrets**: Credenciales de BD almacenadas de forma segura
+- 📡 **Service Discovery**: Comunicación automática con PostgreSQL
+- 📊 **Metrics Endpoint**: Exposición de métricas para Prometheus
+- 🔄 **Connection Pooling**: Pool de conexiones optimizado para contenedores
+- 🛡️ **Security Context**: Contenedor ejecutado con usuario no-root
 
 **Endpoints API**:
 ```javascript
@@ -77,30 +125,30 @@ GET    /tasks           // Obtener todas las tareas
 POST   /tasks           // Crear nueva tarea
 PUT    /tasks/:id       // Actualizar tarea existente
 DELETE /tasks/:id       // Eliminar tarea
-GET    /health          // Health check
-GET    /metrics         // Métricas Prometheus
+GET    /health          // Health check para Kubernetes
+GET    /metrics         // Métricas para Prometheus
 ```
 
 ### 🗄️ Database Service (PostgreSQL)
 
 **Tecnología**: PostgreSQL 15 Alpine
 ```yaml
-Réplicas: 1 (Master único con persistencia)
+Namespace: todoapp
+Deployment: todoapp-postgres
+Réplicas: 1 (StatefulSet pattern)
 Recursos: 500m CPU, 512Mi RAM
-Volumen: 1Gi PersistentVolume
+PVC: 1Gi PersistentVolumeClaim
+ConfigMap: Init SQL scripts
+Secret: Database credentials
 ```
 
-**Responsabilidades**:
-- 💾 Almacenamiento persistente de tareas
-- 🔄 Transacciones ACID garantizadas
-- 📊 Optimización de consultas
-- 🛡️ Integridad referencial
-
-**Escalabilidad**:
-- **Vertical**: Incremento de CPU/RAM según demanda
-- **Read Replicas**: Réplicas de lectura para consultas
-- **Connection Pooling**: PgBouncer para optimizar conexiones
-- **Backup/Restore**: Estrategias de respaldo automatizadas
+**Características Kubernetes**:
+- 💾 **PersistentVolumes**: Datos persistentes con reclaim policy
+- 🔄 **Init Containers**: Inicialización automática de esquema
+- 📊 **Health Checks**: Verificación con pg_isready
+- 🔐 **Network Policies**: Acceso restringido solo desde backend
+- 📈 **Resource Limits**: CPU y memoria garantizados
+- 🔄 **Backup Ready**: Scripts de backup integrados
 
 **Esquema de Base de Datos**:
 ```sql
@@ -114,20 +162,142 @@ CREATE TABLE tasks (
 );
 ```
 
-### � Monitoring Stack (Prometheus + Grafana)
+### 📊 Monitoring Stack (Prometheus + Grafana)
 
-**Tecnología**: Prometheus + Grafana + AlertManager
+**Tecnología**: Prometheus Operator + Grafana
 ```yaml
-Componentes: 8 pods de monitoreo
-Almacenamiento: 5Gi para métricas, 1Gi para Grafana
-Retención: 7 días de métricas históricas
+Namespace: monitoring
+Componentes: 8 pods especializados
+- prometheus-server: Time-series database
+- grafana: Dashboard visualization
+- alertmanager: Alert management
+- node-exporter: Host metrics (3 pods)
+- kube-state-metrics: Kubernetes metrics
+- prometheus-operator: CRD management
 ```
 
-**Responsabilidades**:
-- 📈 Recolección de métricas en tiempo real
-- 🎨 Visualización con dashboards interactivos
-- 🚨 Sistema de alertas automatizado
-- 📊 Análisis de rendimiento y capacidad
+**Características Kubernetes**:
+- 📈 **Custom Resources**: ServiceMonitor, PrometheusRule, AlertmanagerConfig
+- 🎯 **Service Discovery**: Auto-discovery de targets en Kubernetes
+- 📊 **PersistentVolumes**: 5Gi para métricas, 1Gi para Grafana
+- 🔔 **AlertManager**: Gestión de alertas con routing y silencing
+- 📋 **Dashboards**: Pre-configurados para Kubernetes y aplicación
+- 🔄 **High Availability**: Múltiples réplicas con sharding
+
+---
+
+## 🎯 Kubernetes (Kind) - ¿Por qué y cómo?
+
+### 🔍 ¿Por qué Kind para este proyecto?
+
+**Kind (Kubernetes in Docker)** es la herramienta perfecta para este proyecto porque:
+
+✅ **Desarrollo Local Optimizado**
+- Cluster Kubernetes **100% real** corriendo en Docker
+- Startup rápido: **<2 minutos** vs minikube (~5 minutos)
+- Recursos optimizados: usa solo los recursos necesarios
+- **Reproducibilidad**: mismo entorno en cualquier máquina
+
+✅ **Fidelidad con Producción**
+- **API idéntica** a Kubernetes real (EKS, GKE, AKS)
+- Mismos manifiestos YAML funcionan en prod
+- **Networking real**: CNI, Services, Ingress funcionan igual
+- **Storage real**: PersistentVolumes con Local Path Provisioner
+
+✅ **CI/CD Ready**
+- Ideal para **testing automático** en pipelines
+- **GitHub Actions**, GitLab CI/CD compatible
+- **Multi-node clusters** para testing de HA
+- **Ephemeral clusters** para testing aislado
+
+### 🏗️ Configuración del Cluster Kind
+
+**Archivo**: `k8s/kind-config.yaml`
+```yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: todoapp-cluster
+nodes:
+- role: control-plane          # Master node
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+  extraPortMappings:           # Port forwarding hacia host
+  - containerPort: 30000       # Frontend
+    hostPort: 30000
+  - containerPort: 30001       # Backend
+    hostPort: 30001
+  - containerPort: 30002       # Grafana
+    hostPort: 30002
+- role: worker                 # Worker node 1
+- role: worker                 # Worker node 2
+```
+
+### 🔧 Características del Cluster
+
+**Topología**:
+- **1 Control Plane**: API Server, etcd, Scheduler, Controller Manager
+- **2 Worker Nodes**: Para simular entorno de producción multi-nodo
+- **3 Nodos totales**: Permite testing de scheduling, affinity, tolerations
+
+**Networking**:
+- **CNI**: Kindnet (networking plugin optimizado)
+- **Service Types**: ClusterIP, NodePort, LoadBalancer (MetalLB opcional)
+- **Port Mapping**: Acceso directo desde host a servicios
+- **DNS**: CoreDNS para service discovery interno
+
+**Storage**:
+- **Local Path Provisioner**: PersistentVolumes dinámicos
+- **Storage Classes**: default, local-path
+- **Volume Types**: hostPath, emptyDir, configMap, secret
+
+### 🚀 Ventajas sobre Alternativas
+
+| Característica | Kind | Minikube | Docker Compose |
+|----------------|------|----------|----------------|
+| **API Kubernetes** | ✅ 100% Real | ✅ Real | ❌ No |
+| **Multi-node** | ✅ Sí | ❌ Solo single-node | ❌ No |
+| **Startup Time** | ✅ <2 min | ⚠️ ~5 min | ✅ <1 min |
+| **Resource Usage** | ✅ Optimizado | ⚠️ Alto | ✅ Bajo |
+| **Production Parity** | ✅ 100% | ✅ 95% | ❌ 60% |
+| **CI/CD Integration** | ✅ Excelente | ⚠️ Bueno | ❌ Limitado |
+| **Learning Curve** | ⚠️ Medio | ⚠️ Medio | ✅ Bajo |
+
+### 🎛️ Gestión del Cluster Kind
+
+**Comandos esenciales**:
+```bash
+# Crear cluster con configuración
+kind create cluster --config=k8s/kind-config.yaml
+
+# Ver clusters disponibles
+kind get clusters
+
+# Obtener kubeconfig
+kind get kubeconfig --name todoapp-cluster
+
+# Cargar imágenes Docker
+kind load docker-image todoapp-frontend:latest --name todoapp-cluster
+
+# Eliminar cluster
+kind delete cluster --name todoapp-cluster
+```
+
+**Troubleshooting común**:
+```bash
+# Verificar nodos
+kubectl get nodes
+kubectl describe node todoapp-cluster-worker
+
+# Ver pods del sistema
+kubectl get pods -n kube-system
+
+# Logs del cluster
+docker logs todoapp-cluster-control-plane
+```
 
 ---
 
@@ -261,7 +431,7 @@ helm/todoapp/
     └── pvc.yaml        # Storage persistente
 ```
 
-### � Beneficios de la Combinación
+### 🔄 Beneficios de la Combinación
 
 **Kind + Prometheus + Helm = Plataforma Completa**
 
@@ -310,267 +480,103 @@ make logs
 - **Grafana**: http://localhost:30002 (admin/admin123)
 - **Prometheus**: http://localhost:9091
 
-### 🛑 **FINALIZAR TODO (Limpieza Completa)**
+### 🛑 **GESTIÓN DE DATOS**
 ```bash
-# 🧹 Eliminar aplicación y cluster
+# Parar manteniendo datos (RECOMENDADO)
+make soft-stop
+
+# Crear backup antes de limpiar
+make backup
+
+# Limpiar todo (ELIMINA DATOS)
 make clean
 ```
 
 > 📋 **Guía completa de comandos**: Ver [`COMANDOS.md`](COMANDOS.md) para comandos detallados, troubleshooting y mejores prácticas.
 
-## 📊 Arquitectura de Despliegue
+## 📊 Arquitectura de Despliegue en Kubernetes
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │    Backend      │    │   PostgreSQL    │
-│   (React)       │────│   (Node.js)     │────│   (Database)    │
-│   2 réplicas    │    │   2 réplicas    │    │   1 réplica     │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
+┌─────────────────────────────────────────────────────────────┐
+│                    Kind Cluster                             │
+│  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐   │
+│  │ Control Plane │  │   Worker 1    │  │   Worker 2    │   │
+│  │               │  │               │  │               │   │
+│  │ - API Server  │  │ - Frontend    │  │ - Backend     │   │
+│  │ - etcd        │  │ - Postgres    │  │ - Prometheus  │   │
+│  │ - Scheduler   │  │ - Grafana     │  │ - Node Exp.   │   │
+│  │ - Controller  │  │ - Node Exp.   │  │               │   │
+│  └───────────────┘  └───────────────┘  └───────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+                              │
                     ┌─────────────────┐
-                    │   Prometheus    │
-                    │   + Grafana     │
-                    │   (8 pods)      │
+                    │   Host Machine  │
+                    │                 │
+                    │ Port Mappings:  │
+                    │ :30000 → Frontend│
+                    │ :30001 → Backend │
+                    │ :30002 → Grafana │
                     └─────────────────┘
 ```
 
+## 🔍 Observabilidad y Monitoreo
+
+### 📈 **Métricas Disponibles**
+
+**Infraestructura (automáticas)**:
+- CPU, memoria, disco por pod/nodo
+- Tráfico de red y I/O
+- Estado de pods y deployments
+- Eventos de Kubernetes
+
+**Aplicación (configuradas)**:
+- Requests HTTP por endpoint
+- Latencia de respuesta (P50, P95, P99)
+- Códigos de estado HTTP
+- Errores y excepciones
+
+**Negocio (personalizables)**:
+- Tareas creadas/completadas
+- Usuarios activos
+- Tiempo de sesión
+- Patrones de uso
+
+### 🎨 **Dashboards Grafana**
+
+- **Kubernetes Overview**: Estado general del cluster
+- **Pod Monitoring**: Métricas específicas de TodoApp
+- **Node Metrics**: Rendimiento de nodos
+- **Application Metrics**: KPIs de negocio
+
+### 🚨 **Alertas Configuradas**
+
+- Pod no disponible > 1 minuto
+- CPU > 80% por 5 minutos
+- Memoria > 90%
+- Errores HTTP > 5% en 10 minutos
+- Base de datos no disponible
+
 ## 🎯 Roadmap Futuro
 
+### 📋 **Próximas Características**
+- [ ] **Ingress Controller**: Nginx o Traefik para routing avanzado
+- [ ] **Service Mesh**: Istio para comunicación entre microservicios
 - [ ] **CI/CD Pipeline**: GitHub Actions + ArgoCD
-- [ ] **Service Mesh**: Istio para microservicios avanzados
 - [ ] **Autenticación**: OAuth2/JWT con Keycloak
-- [ ] **Cache Layer**: Redis para optimización
+- [ ] **Cache Layer**: Redis para optimización de rendimiento
 - [ ] **Message Queue**: RabbitMQ para procesamiento asíncrono
-- [ ] **Multi-cloud**: AWS EKS + Azure AKS deployment
 
----
+### 🌐 **Evolución hacia Producción**
+- [ ] **Multi-cloud**: Despliegue en AWS EKS + Azure AKS
+- [ ] **GitOps**: ArgoCD para continuous deployment
+- [ ] **Security**: Policy enforcement con OPA Gatekeeper
+- [ ] **Backup**: Velero para backup de cluster completo
+- [ ] **Networking**: Calico para network policies avanzadas
+- [ ] **Storage**: Persistent volumes con CSI drivers
 
-**Desarrollado con ❤️ usando las mejores prácticas de Cloud Native**
+### 📊 **Mejoras de Observabilidad**
+- [ ] **Tracing**: Jaeger para distributed tracing
+- [ ] **Logging**: ELK stack para agregación de logs
+- [ ] **APM**: Application Performance Monitoring
+- [ ] **Chaos Engineering**: Chaos Monkey para testing de resilencia
 
-## 📁 Estructura del Proyecto
-
-```
-dockerapp/
-├── backend/                 # API REST con Node.js
-│   ├── server.js           # Servidor principal
-│   ├── package.json        # Dependencias del backend
-│   ├── Dockerfile          # Imagen Docker del backend
-│   └── .env               # Variables de entorno
-├── frontend/               # Aplicación React
-│   ├── src/
-│   │   ├── App.js         # Componente principal
-│   │   ├── index.js       # Punto de entrada
-│   │   └── index.css      # Estilos CSS
-│   ├── public/
-│   │   └── index.html     # HTML base
-│   ├── package.json       # Dependencias del frontend
-│   └── Dockerfile         # Imagen Docker del frontend
-├── database/               # Configuración de PostgreSQL
-│   └── init.sql           # Script de inicialización de la BD
-├── docker-compose.yml      # Orquestación de contenedores
-├── .dockerignore          # Archivos a ignorar en Docker
-└── README.md              # Este archivo
-```
-
-## ⚡ Inicio Rápido
-
-### Prerrequisitos
-
-- [Docker](https://www.docker.com/get-started) instalado
-- [Docker Compose](https://docs.docker.com/compose/install/) instalado
-
-### Instalación y Ejecución
-
-1. **Clona o descarga el proyecto**
-   ```bash
-   cd /home/leo/dockerapp
-   ```
-
-2. **Construye y ejecuta todos los contenedores**
-   ```bash
-   docker-compose up --build
-   ```
-
-3. **Accede a la aplicación**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:5000
-   - Base de datos: localhost:5432
-
-### Comandos Útiles
-
-```bash
-# Ejecutar en segundo plano
-docker-compose up -d
-
-# Ver logs de todos los servicios
-docker-compose logs
-
-# Ver logs de un servicio específico
-docker-compose logs backend
-docker-compose logs frontend
-docker-compose logs database
-
-# Parar todos los contenedores
-docker-compose down
-
-# Parar y eliminar volúmenes (¡cuidado, se pierden los datos!)
-docker-compose down -v
-
-# Reconstruir imágenes
-docker-compose build
-
-# Reconstruir sin cache
-docker-compose build --no-cache
-```
-
-## 🔧 Configuración
-
-### Variables de Entorno
-
-El backend utiliza las siguientes variables de entorno (configuradas en `backend/.env`):
-
-```env
-PORT=5000
-DB_HOST=database
-DB_PORT=5432
-DB_NAME=tasksdb
-DB_USER=postgres
-DB_PASSWORD=postgres
-```
-
-### Puertos Utilizados
-
-- **3000**: Frontend React
-- **5000**: Backend API REST
-- **5432**: Base de datos PostgreSQL
-
-## 📊 API Endpoints
-
-La API REST proporciona los siguientes endpoints:
-
-### Tareas
-
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| GET | `/tasks` | Obtener todas las tareas |
-| POST | `/tasks` | Crear una nueva tarea |
-| PUT | `/tasks/:id` | Actualizar una tarea existente |
-| DELETE | `/tasks/:id` | Eliminar una tarea |
-
-### Salud del Servicio
-
-| Método | Endpoint | Descripción |
-|--------|----------|-------------|
-| GET | `/health` | Verificar estado de la API |
-
-### Ejemplo de Uso de la API
-
-```bash
-# Obtener todas las tareas
-curl http://localhost:5000/tasks
-
-# Crear una nueva tarea
-curl -X POST http://localhost:5000/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Mi nueva tarea","description":"Descripción de la tarea"}'
-
-# Marcar tarea como completada
-curl -X PUT http://localhost:5000/tasks/1 \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Mi tarea","description":"Descripción","completed":true}'
-
-# Eliminar una tarea
-curl -X DELETE http://localhost:5000/tasks/1
-```
-
-## 🛠️ Desarrollo
-
-### Desarrollo Local (sin Docker)
-
-Si prefieres desarrollar sin Docker:
-
-1. **Backend:**
-   ```bash
-   cd backend
-   npm install
-   npm run dev  # Usa nodemon para hot reload
-   ```
-
-2. **Frontend:**
-   ```bash
-   cd frontend
-   npm install
-   npm start    # Servidor de desarrollo React
-   ```
-
-3. **Base de datos:**
-   Instala PostgreSQL localmente y ejecuta el script `database/init.sql`
-
-### Modificaciones y Hot Reload
-
-Los contenedores están configurados con volúmenes para desarrollo:
-- Los cambios en el código se reflejan automáticamente
-- No necesitas reconstruir las imágenes durante el desarrollo
-
-## 📝 Funcionalidades de la Aplicación
-
-### Frontend (React)
-- Interfaz intuitiva para gestión de tareas
-- Formulario para crear nuevas tareas
-- Lista de tareas con estado visual
-- Marcar tareas como completadas
-- Eliminar tareas
-- Manejo de errores y estados de carga
-
-### Backend (Node.js/Express)
-- API REST completa
-- Validación de datos
-- Manejo de errores
-- Conexión a PostgreSQL
-- CORS habilitado para frontend
-
-### Base de Datos (PostgreSQL)
-- Tabla de tareas con campos: id, título, descripción, completado, timestamps
-- Datos de ejemplo precargados
-- Triggers automáticos para timestamps
-- Persistencia de datos con volúmenes Docker
-
-## 🐛 Solución de Problemas
-
-### Los contenedores no se conectan
-- Verifica que todos los contenedores estén ejecutándose: `docker-compose ps`
-- Revisa los logs: `docker-compose logs`
-
-### Error de conexión a la base de datos
-- Espera a que PostgreSQL esté listo (usa health checks)
-- Verifica las credenciales en las variables de entorno
-
-### Cambios no se reflejan
-- Para cambios en package.json: `docker-compose build`
-- Para cambios en Dockerfile: `docker-compose build --no-cache`
-
-### Puerto ocupado
-- Cambia los puertos en `docker-compose.yml` si están ocupados
-- Verifica procesos usando los puertos: `lsof -i :3000`
-
-## 🚀 Próximos Pasos
-
-Ideas para expandir la aplicación:
-
-- [ ] Autenticación de usuarios
-- [ ] Categorías de tareas
-- [ ] Fechas de vencimiento
-- [ ] Notificaciones
-- [ ] Tests automatizados
-- [ ] CI/CD pipeline
-- [ ] Deployment en producción
-
-## 📄 Licencia
-
-Este proyecto es de ejemplo y está disponible bajo la licencia MIT.
-
----
-
-¡Felicidades! 🎉 Tienes una aplicación web completa funcionando con Docker. Explora el código, modifica las funcionalidades y aprende sobre arquitectura de microservicios.

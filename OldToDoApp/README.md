@@ -183,11 +183,6 @@ Si prefieres desarrollar sin Docker:
 3. **Base de datos:**
    Instala PostgreSQL localmente y ejecuta el script `database/init.sql`
 
-### Modificaciones y Hot Reload
-
-Los contenedores están configurados con volúmenes para desarrollo:
-- Los cambios en el código se reflejan automáticamente
-- No necesitas reconstruir las imágenes durante el desarrollo
 
 ## 📝 Funcionalidades de la Aplicación
 
@@ -212,40 +207,9 @@ Los contenedores están configurados con volúmenes para desarrollo:
 - Triggers automáticos para timestamps
 - Persistencia de datos con volúmenes Docker
 
-## 🐛 Solución de Problemas
-
-### Los contenedores no se conectan
-- Verifica que todos los contenedores estén ejecutándose: `docker-compose ps`
-- Revisa los logs: `docker-compose logs`
-
-### Error de conexión a la base de datos
-- Espera a que PostgreSQL esté listo (usa health checks)
-- Verifica las credenciales en las variables de entorno
-
-### Cambios no se reflejan
-- Para cambios en package.json: `docker-compose build`
-- Para cambios en Dockerfile: `docker-compose build --no-cache`
-
-### Puerto ocupado
-- Cambia los puertos en `docker-compose.yml` si están ocupados
-- Verifica procesos usando los puertos: `lsof -i :3000`
-
-## 🚀 Próximos Pasos
-
-Ideas para expandir la aplicación:
-
-- [ ] Autenticación de usuarios
-- [ ] Categorías de tareas
-- [ ] Fechas de vencimiento
-- [ ] Notificaciones
-- [ ] Tests automatizados
-- [ ] CI/CD pipeline
-- [ ] Deployment en producción
-
 ## 📄 Licencia
 
 Este proyecto es de ejemplo y está disponible bajo la licencia MIT.
 
 ---
 
-¡Felicidades! 🎉 Tienes una aplicación web completa funcionando con Docker. Explora el código, modifica las funcionalidades y aprende sobre arquitectura de microservicios.

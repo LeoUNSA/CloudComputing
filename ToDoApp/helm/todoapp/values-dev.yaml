@@ -1,0 +1,44 @@
+# Configuración para desarrollo local con valores modificados
+replicaCount:
+  backend: 1
+  frontend: 1
+  postgres: 1
+
+image:
+  backend:
+    repository: todoapp-backend
+    pullPolicy: Never
+    tag: "latest"
+  frontend:
+    repository: todoapp-frontend
+    pullPolicy: Never
+    tag: "latest"
+
+resources:
+  backend:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  frontend:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  postgres:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+persistence:
+  enabled: false  # Deshabilitar persistencia para desarrollo
+
+monitoring:
+  enabled: false  # Deshabilitar monitoreo en desarrollo

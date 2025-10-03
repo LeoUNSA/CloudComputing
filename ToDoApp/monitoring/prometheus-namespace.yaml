@@ -1,0 +1,9 @@
+# Prometheus Stack con Helm
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+# Values file para prometheus-stack
+# Este archivo se puede usar con:
+# helm install prometheus prometheus-community/kube-prometheus-stack -f prometheus-values.yaml -n monitoring

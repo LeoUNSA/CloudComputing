@@ -1,0 +1,73 @@
+---
+# Playbook para limpiar recursos de GCP
+- name: Cleanup GCP Resources
+  hosts: localhost
+  gather_facts: yes
+  
+  tasks:
+    - name: Confirm deletion
+      pause:
+        prompt: "Are you sure you want to delete the GKE cluster and all resources? (yes/no)"
+      register: confirm
+      
+    - name: Abort if not confirmed
+      fail:
+        msg: "Cleanup aborted by user"
+      when: confirm.user_input != "yes"
+      
+    - name: Delete Helm release
+      command: >
+        helm uninstall {{ helm_release_name }}
+        --namespace {{ app_namespace }}
+      register: helm_delete
+      failed_when:
+        - helm_delete.rc != 0
+        - "'not found' not in helm_delete.stderr"
+      changed_when: helm_delete.rc == 0
+      
+    - name: Delete namespace
+      command: kubectl delete namespace {{ app_namespace }}
+      register: ns_delete
+      failed_when:
+        - ns_delete.rc != 0
+        - "'not found' not in ns_delete.stderr"
+      changed_when: ns_delete.rc == 0
+      
+    - name: Delete GKE cluster
+      command: >
+        gcloud container clusters delete {{ gke_cluster_name }}
+        --zone={{ gcp_zone }}
+        --project="{{ gcp_project_id }}"
+        --quiet
+      register: cluster_delete
+      failed_when:
+        - cluster_delete.rc != 0
+        - "'does not exist' not in cluster_delete.stderr"
+      changed_when: cluster_delete.rc == 0
+      
+    - name: Delete subnet
+      command: >
+        gcloud compute networks subnets delete {{ gke_subnet_name }}
+        --region={{ gcp_region }}
+        --project="{{ gcp_project_id }}"
+        --quiet
+      register: subnet_delete
+      failed_when:
+        - subnet_delete.rc != 0
+        - "'does not exist' not in subnet_delete.stderr"
+      changed_when: subnet_delete.rc == 0
+      
+    - name: Delete VPC network
+      command: >
+        gcloud compute networks delete {{ gke_network_name }}
+        --project="{{ gcp_project_id }}"
+        --quiet
+      register: network_delete
+      failed_when:
+        - network_delete.rc != 0
+        - "'does not exist' not in network_delete.stderr"
+      changed_when: network_delete.rc == 0
+      
+    - name: Display cleanup summary
+      debug:
+        msg: "All GCP resources have been deleted successfully!"

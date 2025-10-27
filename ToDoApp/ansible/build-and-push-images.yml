@@ -1,0 +1,50 @@
+---
+# Playbook para construir y subir imágenes Docker a GCR
+- name: Build and Push Docker Images to GCR
+  hosts: localhost
+  gather_facts: yes
+  
+  vars:
+    backend_image: "{{ docker_registry }}/todoapp-backend:{{ image_tag }}"
+    frontend_image: "{{ docker_registry }}/todoapp-frontend:{{ image_tag }}"
+    
+  tasks:
+    - name: Configure Docker to use gcloud as credential helper
+      command: gcloud auth configure-docker
+      changed_when: false
+      
+    - name: Build backend Docker image
+      command: >
+        docker build 
+        -t {{ backend_image }}
+        -f backend/Dockerfile
+        backend/
+      args:
+        chdir: ../..
+      register: backend_build
+      changed_when: true
+      
+    - name: Build frontend Docker image
+      command: >
+        docker build 
+        -t {{ frontend_image }}
+        -f frontend/Dockerfile
+        frontend/
+      args:
+        chdir: ../..
+      register: frontend_build
+      changed_when: true
+      
+    - name: Push backend image to GCR
+      command: docker push {{ backend_image }}
+      changed_when: true
+      
+    - name: Push frontend image to GCR
+      command: docker push {{ frontend_image }}
+      changed_when: true
+      
+    - name: Display pushed images
+      debug:
+        msg:
+          - "Backend Image: {{ backend_image }}"
+          - "Frontend Image: {{ frontend_image }}"

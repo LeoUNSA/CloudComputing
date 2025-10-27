@@ -1,0 +1,40 @@
+---
+# Playbook principal - Ejecuta todo el flujo de deployment
+- name: Complete GKE AutoScaling Deployment Pipeline
+  hosts: localhost
+  gather_facts: yes
+  
+  tasks:
+    - name: Step 1 - Setup GKE Cluster
+      include_tasks: setup-gke-cluster.yml
+      tags: [cluster, setup]
+      
+    - name: Step 2 - Build and Push Docker Images
+      include_tasks: build-and-push-images.yml
+      tags: [build, images]
+      
+    - name: Step 3 - Deploy Application
+      include_tasks: deploy-app.yml
+      tags: [deploy, app]
+      
+    - name: Display final summary
+      debug:
+        msg:
+          - "=========================================="
+          - "  TodoApp Deployment Complete!"
+          - "=========================================="
+          - ""
+          - "Cluster: {{ gke_cluster_name }}"
+          - "Region: {{ gcp_region }}"
+          - "Zone: {{ gcp_zone }}"
+          - ""
+          - "Auto-scaling Configuration:"
+          - "  - Cluster Nodes: {{ gke_node_pool.min_node_count }}-{{ gke_node_pool.max_node_count }}"
+          - "  - Backend Pods: {{ autoscaling.backend.min_replicas }}-{{ autoscaling.backend.max_replicas }}"
+          - "  - Frontend Pods: {{ autoscaling.frontend.min_replicas }}-{{ autoscaling.frontend.max_replicas }}"
+          - ""
+          - "Next Steps:"
+          - "  1. Run load tests: cd ../load-testing && ./run-load-test.sh"
+          - "  2. Monitor HPA: kubectl get hpa -n {{ app_namespace }} -w"
+          - "  3. Monitor nodes: kubectl get nodes -w"
+          - "=========================================="

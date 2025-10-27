@@ -1,0 +1,54 @@
+---
+# GCP Project Configuration
+gcp_project_id: "{{ lookup('env', 'GCP_PROJECT_ID') }}"
+gcp_region: "us-central1"
+gcp_zone: "us-central1-a"
+gcp_credentials_file: "{{ lookup('env', 'GCP_CREDENTIALS_FILE') | default('~/.gcp/credentials.json', true) }}"
+
+# GKE Cluster Configuration
+gke_cluster_name: "todoapp-autoscaling-cluster"
+gke_cluster_version: "latest"
+gke_network_name: "todoapp-network"
+gke_subnet_name: "todoapp-subnet"
+gke_subnet_cidr: "10.0.0.0/24"
+
+# Node Pool Configuration for Autoscaling
+gke_node_pool:
+  name: "default-pool"
+  initial_node_count: 2
+  min_node_count: 2
+  max_node_count: 10
+  machine_type: "e2-standard-2"
+  disk_size_gb: 50
+  disk_type: "pd-standard"
+  preemptible: false
+  auto_repair: true
+  auto_upgrade: true
+  
+# Autoscaling Configuration
+autoscaling:
+  cluster_autoscaler_enabled: true
+  hpa_enabled: true
+  
+  # Backend HPA Configuration
+  backend:
+    min_replicas: 2
+    max_replicas: 10
+    target_cpu_utilization: 50
+    target_memory_utilization: 70
+    
+  # Frontend HPA Configuration
+  frontend:
+    min_replicas: 2
+    max_replicas: 8
+    target_cpu_utilization: 60
+    target_memory_utilization: 75
+
+# Application Configuration
+app_namespace: "todoapp"
+helm_chart_path: "../../helm/todoapp"
+helm_release_name: "todoapp"
+
+# Docker Registry Configuration (for GCR)
+docker_registry: "gcr.io/{{ gcp_project_id }}"
+image_tag: "latest"

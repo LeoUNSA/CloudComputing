@@ -103,6 +103,32 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'API funcionando correctamente' });
 });
 
+// Ruta para generar carga CPU (para pruebas de autoscaling)
+app.get('/stress', (req, res) => {
+  const duration = parseInt(req.query.duration) || 30000; // 30 segundos por defecto
+  const startTime = Date.now();
+  
+  console.log(`⚡ Iniciando stress test por ${duration}ms`);
+  
+  // Generar carga CPU intensiva
+  while (Date.now() - startTime < duration) {
+    Math.sqrt(Math.random() * 1000000);
+    // Operaciones matemáticas intensivas
+    for (let i = 0; i < 1000; i++) {
+      Math.pow(Math.random(), Math.random());
+    }
+  }
+  
+  const elapsed = Date.now() - startTime;
+  console.log(`✅ Stress test completado en ${elapsed}ms`);
+  
+  res.json({ 
+    status: 'completed', 
+    duration: elapsed,
+    message: 'Stress test completado'
+  });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
 });

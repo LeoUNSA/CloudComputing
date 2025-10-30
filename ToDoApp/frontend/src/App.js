@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 // Configurar la URL base para las peticiones
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:30001';
+// En GCP/producción usa /api (proxy por nginx), en desarrollo usa localhost:30001
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 function App() {
   const [tasks, setTasks] = useState([]);

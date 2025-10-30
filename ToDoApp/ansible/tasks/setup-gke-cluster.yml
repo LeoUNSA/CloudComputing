@@ -1,0 +1,123 @@
+---
+# Tareas para crear y configurar cluster GKE con autoscaling
+- name: Display configuration
+  debug:
+    msg: 
+      - "GCP Project: {{ gcp_project_id }}"
+      - "Region: {{ gcp_region }}"
+      - "Cluster: {{ gke_cluster_name }}"
+      - "Node Pool: {{ gke_node_pool.min_node_count }}-{{ gke_node_pool.max_node_count }} nodes"
+
+- name: Check if using service account or user credentials
+  set_fact:
+    use_service_account: "{{ gcp_credentials_file is defined and gcp_credentials_file != '' }}"
+
+- name: Validate GCP credentials (if using service account)
+  stat:
+    path: "{{ gcp_credentials_file }}"
+  register: gcp_creds
+  when: use_service_account
+  failed_when: use_service_account and not gcp_creds.stat.exists
+
+- name: Ensure gcloud SDK is authenticated (if using service account)
+  shell: |
+    gcloud auth activate-service-account --key-file="{{ gcp_credentials_file }}"
+    gcloud config set project "{{ gcp_project_id }}"
+  environment:
+    CLOUDSDK_CORE_PROJECT: "{{ gcp_project_id }}"
+  changed_when: false
+  when: use_service_account
+
+- name: Ensure project is set (if using user credentials)
+  command: gcloud config set project "{{ gcp_project_id }}"
+  changed_when: false
+  when: not use_service_account
+
+- name: Enable required GCP APIs
+  command: >
+    gcloud services enable {{ item }}
+    --project="{{ gcp_project_id }}"
+  loop:
+    - compute.googleapis.com
+    - container.googleapis.com
+    - containerregistry.googleapis.com
+  register: api_result
+  changed_when: "'enabled' in api_result.stdout or 'already enabled' not in api_result.stderr"
+  failed_when: 
+    - api_result.rc != 0
+    - "'already enabled' not in api_result.stderr"
+
+- name: Create VPC network
+  command: >
+    gcloud compute networks create {{ gke_network_name }}
+    --subnet-mode=custom
+    --project="{{ gcp_project_id }}"
+  register: network_result
+  failed_when: 
+    - network_result.rc != 0
+    - "'already exists' not in network_result.stderr"
+  changed_when: network_result.rc == 0
+
+- name: Create subnet
+  command: >
+    gcloud compute networks subnets create {{ gke_subnet_name }}
+    --network={{ gke_network_name }}
+    --region={{ gcp_region }}
+    --range={{ gke_subnet_cidr }}
+    --project="{{ gcp_project_id }}"
+  register: subnet_result
+  failed_when: 
+    - subnet_result.rc != 0
+    - "'already exists' not in subnet_result.stderr"
+  changed_when: subnet_result.rc == 0
+
+- name: Create GKE cluster with autoscaling
+  command: >
+    gcloud container clusters create {{ gke_cluster_name }}
+    --zone={{ gcp_zone }}
+    --network={{ gke_network_name }}
+    --subnetwork={{ gke_subnet_name }}
+    --cluster-version={{ gke_cluster_version }}
+    --machine-type={{ gke_node_pool.machine_type }}
+    --num-nodes={{ gke_node_pool.initial_node_count }}
+    --min-nodes={{ gke_node_pool.min_node_count }}
+    --max-nodes={{ gke_node_pool.max_node_count }}
+    --enable-autoscaling
+    --enable-autorepair
+    --enable-autoupgrade
+    --disk-size={{ gke_node_pool.disk_size_gb }}
+    --disk-type={{ gke_node_pool.disk_type }}
+    --addons=HorizontalPodAutoscaling,HttpLoadBalancing
+    --project="{{ gcp_project_id }}"
+  register: cluster_result
+  failed_when: 
+    - cluster_result.rc != 0
+    - "'already exists' not in cluster_result.stderr"
+  changed_when: cluster_result.rc == 0
+
+- name: Get cluster credentials
+  command: >
+    gcloud container clusters get-credentials {{ gke_cluster_name }}
+    --zone={{ gcp_zone }}
+    --project="{{ gcp_project_id }}"
+  changed_when: false
+
+- name: Wait for cluster to be ready
+  command: kubectl cluster-info
+  register: cluster_info
+  until: cluster_info.rc == 0
+  retries: 10
+  delay: 10
+  changed_when: false
+
+- name: Create namespace for application
+  command: kubectl create namespace {{ app_namespace }}
+  register: ns_result
+  failed_when: 
+    - ns_result.rc != 0
+    - "'already exists' not in ns_result.stderr"
+  changed_when: ns_result.rc == 0
+
+- name: Display cluster information
+  debug:
+    msg: "GKE Cluster '{{ gke_cluster_name }}' is ready with autoscaling enabled!"

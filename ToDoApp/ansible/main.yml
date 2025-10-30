@@ -6,15 +6,15 @@
   
   tasks:
     - name: Step 1 - Setup GKE Cluster
-      include_tasks: setup-gke-cluster.yml
+      include_tasks: tasks/setup-gke-cluster.yml
       tags: [cluster, setup]
       
     - name: Step 2 - Build and Push Docker Images
-      include_tasks: build-and-push-images.yml
+      include_tasks: tasks/build-and-push-images.yml
       tags: [build, images]
       
     - name: Step 3 - Deploy Application
-      include_tasks: deploy-app.yml
+      include_tasks: tasks/deploy-app.yml
       tags: [deploy, app]
       
     - name: Display final summary

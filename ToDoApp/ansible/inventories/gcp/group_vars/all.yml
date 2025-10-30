@@ -1,9 +1,9 @@
 ---
 # GCP Project Configuration
-gcp_project_id: "{{ lookup('env', 'GCP_PROJECT_ID') }}"
+gcp_project_id: "{{ lookup('env', 'GCP_PROJECT_ID') | default('todoapp-autoscaling-demo', true) }}"
 gcp_region: "us-central1"
 gcp_zone: "us-central1-a"
-gcp_credentials_file: "{{ lookup('env', 'GCP_CREDENTIALS_FILE') | default('~/.gcp/credentials.json', true) }}"
+gcp_credentials_file: "{{ lookup('env', 'GCP_CREDENTIALS_FILE') | default('', true) }}"
 
 # GKE Cluster Configuration
 gke_cluster_name: "todoapp-autoscaling-cluster"

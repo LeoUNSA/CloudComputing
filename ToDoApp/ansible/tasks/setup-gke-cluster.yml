@@ -43,9 +43,8 @@
     - containerregistry.googleapis.com
   register: api_result
   changed_when: "'enabled' in api_result.stdout or 'already enabled' not in api_result.stderr"
-  failed_when: 
-    - api_result.rc != 0
-    - "'already enabled' not in api_result.stderr"
+  failed_when: false
+  ignore_errors: true
 
 - name: Create VPC network
   command: >

@@ -14,17 +14,95 @@ Este proyecto está diseñado para **desplegar toda la infraestructura con Ansib
 ansible-playbook -i ansible/inventories/gcp/hosts.yml ansible/main.yml
 ```
 
-### ¿Qué hace este playbook?
+### ¿Cómo funciona el despliegue con Ansible?
 
-1. ✅ **Habilita APIs de GCP** (Compute, Container, Container Registry)
-2. ✅ **Crea infraestructura de red** (VPC custom y subnet)
-3. ✅ **Crea cluster GKE** con autoscaling habilitado (2-10 nodos)
-4. ✅ **Configura kubectl** con las credenciales del cluster
-5. ✅ **Construye imágenes Docker** (backend y frontend)
-6. ✅ **Sube imágenes a GCR** (Google Container Registry)
-7. ✅ **Instala metrics-server** (si no está presente)
-8. ✅ **Despliega la aplicación** vía Helm con HPA configurado
-9. ✅ **Espera a que todo esté listo** y muestra la IP externa
+Ansible orquesta **toda la infraestructura cloud y el despliegue de aplicaciones**, integrando herramientas como `gcloud`, `docker`, `kubectl` y `helm` en un flujo unificado:
+
+#### **Fase 1: Infraestructura GCP** (`ansible/tasks/setup-gke-cluster.yml`)
+
+```yaml
+1. Habilitar APIs de GCP
+   → gcloud services enable compute.googleapis.com container.googleapis.com
+
+2. Crear VPC y Subnet personalizadas
+   → gcloud compute networks create todoapp-network
+   → gcloud compute subnets create todoapp-subnet (10.0.0.0/24)
+
+3. Crear cluster GKE con autoscaling
+   → gcloud container clusters create todoapp-autoscaling-cluster
+     --enable-autoscaling --min-nodes=2 --max-nodes=10
+     --machine-type=e2-standard-2
+
+4. Configurar kubectl
+   → gcloud container clusters get-credentials
+   → kubectl create namespace todoapp
+```
+
+#### **Fase 2: Construcción de Imágenes** (`ansible/tasks/build-and-push-images.yml`)
+
+```yaml
+1. Configurar Docker para GCR
+   → gcloud auth configure-docker
+
+2. Construir imágenes localmente
+   → docker build -t gcr.io/PROJECT/todoapp-backend:latest ./backend
+   → docker build -t gcr.io/PROJECT/todoapp-frontend:latest ./frontend
+
+3. Subir a Google Container Registry
+   → docker push gcr.io/PROJECT/todoapp-backend:latest
+   → docker push gcr.io/PROJECT/todoapp-frontend:latest
+```
+
+#### **Fase 3: Despliegue de Aplicación** (`ansible/tasks/deploy-app.yml`)
+
+```yaml
+1. Instalar metrics-server (si no existe)
+   → kubectl get deployment metrics-server -n kube-system
+   → Si no existe: helm install metrics-server (con flags para GKE)
+
+2. Generar archivo de valores dinámico
+   → Crea /tmp/values-gcp-autoscaling.yaml con:
+     - Imágenes de GCR (gcr.io/PROJECT/todoapp-*)
+     - Configuración de autoscaling (min/max replicas, umbrales)
+     - Recursos de pods (CPU/Memory requests/limits)
+     - Credenciales de base de datos
+
+3. Desplegar con Helm
+   → helm upgrade --install todoapp ./helm/todoapp
+     --namespace todoapp
+     --values /tmp/values-gcp-autoscaling.yaml
+     --wait --timeout 10m
+   
+   Helm crea:
+   - 3 Deployments (backend, frontend, postgres)
+   - 2 HorizontalPodAutoscalers (backend, frontend)
+   - 4 Services (backend, frontend, postgres, nodeports)
+   - 1 PersistentVolumeClaim (postgres data)
+   - 1 ConfigMap (database init scripts)
+
+4. Esperar a que los pods estén listos
+   → kubectl wait --for=condition=ready deployment/todoapp-backend
+   → kubectl wait --for=condition=ready deployment/todoapp-frontend
+
+5. Obtener IP externa del LoadBalancer
+   → kubectl get svc todoapp-frontend -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+```
+
+### Interacción Ansible ↔ Helm
+
+Ansible **no reemplaza** a Helm, sino que lo **orquesta** como parte del pipeline:
+
+| Responsabilidad | Herramienta |
+|----------------|-------------|
+| Crear infraestructura cloud (VPC, GKE) | **Ansible** → `gcloud` |
+| Construir/subir imágenes Docker | **Ansible** → `docker` |
+| Generar configuración dinámica | **Ansible** (templates Jinja2) |
+| Desplegar manifiestos K8s | **Ansible** → `helm` |
+| Gestionar releases de aplicación | **Helm** (llamado por Ansible) |
+| Configurar HPA y recursos | **Helm** (values.yaml) |
+| Idempotencia y validación | **Ansible** (failed_when, changed_when) |
+
+**Ventaja:** Un solo comando (`ansible-playbook`) orquesta toda la stack, desde red hasta aplicación.
 
 **Tiempo estimado:** 8-12 minutos
 
@@ -301,60 +379,98 @@ El proyecto incluye **GitHub Actions workflows** para automatizar build, testing
 
 ---
 
-## �🔧 Configuración de Autoscaling
+## 🔧 Configuración de Autoscaling
 
-### HPA (Horizontal Pod Autoscaler)
+### Configuración Optimizada para Testing
 
-Configurado en `helm/todoapp/templates/hpa.yaml`:
+Los valores han sido optimizados para hacer el autoscaling **fácilmente observable**:
 
-**Backend:**
-- Min replicas: 2
-- Max replicas: 10
-- Target CPU: 50%
-- Target Memory: 70%
+#### **HPA (Horizontal Pod Autoscaler)**
 
-**Frontend:**
-- Min replicas: 2
-- Max replicas: 8
-- Target CPU: 60%
-- Target Memory: 75%
-
-### Cluster Autoscaler
-
-Configurado en la creación del cluster GKE:
-
-- Min nodes: 2
-- Max nodes: 10
-- Machine type: e2-standard-2 (2 vCPU, 8 GB RAM)
-
-### Variables de Configuración
-
-Todas las variables están centralizadas en:
+Configurado en `ansible/inventories/gcp/group_vars/all.yml`:
 
 ```yaml
-# ansible/inventories/gcp/group_vars/all.yml
-
-gcp_project_id: "tu-proyecto-id"
-gcp_region: "us-central1"
-gcp_zone: "us-central1-a"
-
-gke_node_pool:
-  min_node_count: 2
-  max_node_count: 10
-  machine_type: "e2-standard-2"
-
 autoscaling:
   backend:
     min_replicas: 2
-    max_replicas: 10
-    target_cpu_utilization: 50
-    target_memory_utilization: 70
+    max_replicas: 20      # ← 10x más capacidad (antes 10)
+    target_cpu_utilization: 30      # ← Escala a 30% CPU (antes 50%)
+    target_memory_utilization: 50   # ← Escala a 50% RAM (antes 70%)
+  
   frontend:
     min_replicas: 2
-    max_replicas: 8
-    target_cpu_utilization: 60
-    target_memory_utilization: 75
+    max_replicas: 15      # ← Casi 2x (antes 8)
+    target_cpu_utilization: 35      # ← Más sensible (antes 60%)
+    target_memory_utilization: 55   # ← Más sensible (antes 75%)
 ```
+
+**¿Cómo se aplica?** Ansible genera dinámicamente `/tmp/values-gcp-autoscaling.yaml` con estos valores y los pasa a Helm durante el despliegue.
+
+#### **Cluster Autoscaler**
+
+Configurado al crear el cluster GKE:
+
+```yaml
+gke_node_pool:
+  initial_node_count: 2
+  min_node_count: 2
+  max_node_count: 10
+  machine_type: "e2-standard-2"  # 2 vCPU, 8 GB RAM
+  auto_repair: true
+  auto_upgrade: true
+```
+
+#### **Recursos de Pods**
+
+Aumentados en `helm/todoapp/values.yaml` para forzar escalado de nodos:
+
+```yaml
+resources:
+  backend:
+    requests:
+      cpu: 200m      # ← 2x más (antes 100m)
+      memory: 256Mi  # ← 2x más (antes 128Mi)
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+  frontend:
+    requests:
+      cpu: 150m      # ← 1.5x más (antes 100m)
+      memory: 256Mi  # ← 2x más (antes 128Mi)
+    limits:
+      cpu: 400m
+      memory: 512Mi
+```
+
+### ¿Por qué estos valores?
+
+Con `e2-standard-2` (2 vCPU, 8GB RAM):
+- Cada nodo puede alojar **~4-5 pods backend** (200m CPU × 5 = 1000m = 1 vCPU)
+- Con 20 pods backend → necesitará **~5-6 nodos** para alojarlos
+- Umbrales bajos (30-35%) garantizan escalado rápido bajo carga moderada
+
+**Resultado:** El autoscaling de nodos es **fácilmente visible** durante tests de carga.
+
+### Personalizar Autoscaling
+
+Edita `ansible/inventories/gcp/group_vars/all.yml` y vuelve a desplegar:
+
+```yaml
+# Más agresivo (escala rápido)
+autoscaling:
+  backend:
+    max_replicas: 30
+    target_cpu_utilization: 20  # Escala al 20% CPU
+
+# Más conservador (tolera más carga)
+autoscaling:
+  backend:
+    max_replicas: 10
+    target_cpu_utilization: 80  # Escala al 80% CPU
+```
+
+Luego: `ansible-playbook -i ansible/inventories/gcp/hosts.yml ansible/main.yml`
 
 ---
 
@@ -424,7 +540,7 @@ Este script genera carga, monitorea el autoscaling y muestra estadísticas en ti
 
 **¿Qué hace?**
 - ✅ Muestra estado inicial (pods, nodos, HPA)
-- ✅ Crea 8 generadores de carga automáticamente
+- ✅ Crea 15 generadores de carga automáticamente (configurado para mayor carga)
 - ✅ Monitorea pods, nodos y HPA cada 10 segundos
 - ✅ Muestra métricas en tiempo real con colores
 - ✅ Detecta cuando se añaden pods y nodos
@@ -433,7 +549,7 @@ Este script genera carga, monitorea el autoscaling y muestra estadísticas en ti
 **Personalizar:**
 ```bash
 # Más carga = más pods/nodos
-LOAD_GENERATORS=12 ./load-testing/test-autoscaling.sh
+LOAD_GENERATORS=20 ./load-testing/test-autoscaling.sh
 
 # Test más largo
 TEST_DURATION=900 ./load-testing/test-autoscaling.sh  # 15 minutos
@@ -471,41 +587,44 @@ done
 kubectl delete pod -n todoapp -l role=load-generator
 ```
 
-### Comportamiento Esperado
+### Comportamiento Esperado (con configuración optimizada)
 
 ```
 T=0min:  🟢 Estado inicial
-         - 2 pods backend, 2 nodos, CPU ~5%
+         - 2 pods backend, 2 nodos, CPU ~1%
 
-T=0min:  🔴 Iniciar carga (8 generadores)
+T=0min:  🔴 Iniciar carga (15 generadores)
          
-T=1min:  📈 HPA detecta CPU alto (>50%)
-         - Backend: 2 → 4 pods
+T=1min:  📈 HPA detecta CPU alto (>30%)
+         - Backend: 2 → 6 pods
          
-T=2-3min: 📈 HPA escala continuamente
-         - Backend: 4 → 6 → 8 → 10 pods
+T=2-3min: 📈 HPA escala agresivamente
+         - Backend: 6 → 12 → 16 → 20 pods (máximo)
          
-T=4-5min: ⚠️  Pods "Pending"
-         - 10 pods (máximo HPA)
-         - No hay recursos en nodos
+T=3-4min: ⚠️  Pods "Pending"
+         - 20 pods (máximo HPA alcanzado)
+         - Nodos saturados (solo 2 nodos iniciales)
 
-T=7min:  🖥️  Cluster Autoscaler añade nodo #3
-         - Pods "Pending" → "Running"
+T=5-7min: 🖥️  Cluster Autoscaler añade 4-5 nodos
+         - Nodo #3, #4, #5, #6 creándose
+         - Pods "Pending" → "Running" progresivamente
+         
+T=8min:  ✅ Sistema estabilizado
+         - 20 pods backend corriendo
+         - 6-7 nodos activos
          
 ──────────────────────────────────────────
 
 T=X:     🔵 Detener carga
          
 T+2min:  📉 HPA reduce gradualmente
-         - 10 → 8 → 6 → 4 → 2 pods
+         - 20 → 15 → 10 → 5 → 2 pods
          
 T+10min: 🖥️  Cluster Autoscaler elimina nodos
-         - Vuelve a 2 nodos (mínimo)
+         - 6-7 → 5 → 4 → 3 → 2 nodos (mínimo)
 ```
 
 **📖 Más detalles:** `docs/05-MANUAL-AUTOSCALING-TEST.md`
-
-**� Documentación detallada:** Ver `docs/05-MANUAL-AUTOSCALING-TEST.md`
 
 ---
 
@@ -624,10 +743,16 @@ kubectl get events -n kube-system | grep cluster-autoscaler
 | 2 nodos e2-standard-2 | 2 vCPU, 8GB RAM cada uno | ~$0.13 |
 | Load Balancer | 1 regla | ~$0.025 |
 | Persistent Disk | 10GB SSD | ~$0.0002 |
-| **Total** | **Mínimo** | **~$0.16/hora** |
+| **Total** | **Mínimo (2 nodos)** | **~$0.16/hora** |
 
 **Costo diario mínimo:** ~$3.84  
 **Costo mensual mínimo (24/7):** ~$115
+
+**Con autoscaling bajo carga:**
+- 6-7 nodos e2-standard-2: ~$0.45/hora (~$10.80/día)
+- 10 nodos (máximo): ~$0.65/hora (~$15.60/día)
+
+**Ventaja:** Pagas solo durante tests de carga. El cluster escala automáticamente a mínimo cuando no hay tráfico.
 
 ### Reducir costos
 
@@ -772,18 +897,20 @@ gcp_zone: "europe-west1-b"
 ### Ajustar Autoscaling
 
 ```yaml
-# Más agresivo
+# ansible/inventories/gcp/group_vars/all.yml
+
+# Más agresivo (configuración actual - optimizada para testing)
 autoscaling:
   backend:
-    min_replicas: 1
+    min_replicas: 2
     max_replicas: 20
-    target_cpu_utilization: 30  # Escala más rápido
+    target_cpu_utilization: 30  # Escala rápido
 
-# Más conservador
+# Más conservador (para producción)
 autoscaling:
   backend:
     min_replicas: 3
-    max_replicas: 6
+    max_replicas: 10
     target_cpu_utilization: 80  # Tolera más carga
 ```
 
@@ -841,36 +968,54 @@ kubectl get events -n todoapp --sort-by='.lastTimestamp'
 
 ## 📊 Métricas y Costos
 
-### Recursos Utilizados
+### Recursos Utilizados (configuración optimizada)
 
 **Estado inicial (mínimo)**:
 - 2 nodos e2-standard-2
-- 2 pods backend
-- 2 pods frontend
-- 1 pod postgres
+- 2 pods backend, 2 pods frontend, 1 pod postgres
 - **Costo estimado**: ~$100-120 USD/mes
 
-**Estado con carga (máximo)**:
-- 10 nodos e2-standard-2
-- 10 pods backend
-- 8 pods frontend
-- 1 pod postgres
-- **Costo estimado**: ~$500-600 USD/mes (solo durante carga)
+**Estado bajo carga (escalado activo)**:
+- 6-7 nodos e2-standard-2
+- 15-20 pods backend, 10-15 pods frontend
+- **Costo estimado**: ~$300-350 USD/mes (solo durante pruebas)
 
-**Ventaja del autoscaling**: Pagas solo por lo que usas, escala automáticamente según demanda.
+**Estado máximo (picos extremos)**:
+- 10 nodos e2-standard-2 (máximo configurado)
+- 20 pods backend (máximo HPA), 15 pods frontend
+- **Costo estimado**: ~$500-600 USD/mes (solo durante carga extrema)
+
+**Ventaja del autoscaling**: El cluster escala automáticamente:
+- **Scale-up**: 3-5 minutos para añadir nodos bajo demanda
+- **Scale-down**: 10-15 minutos para eliminar nodos infrautilizados
+- **Resultado**: Pagas solo por lo que usas, optimizando costos
 
 ---
 
 ## 🎓 Conceptos Clave
 
 ### HPA (Horizontal Pod Autoscaler)
-Escala el **número de réplicas** de un Deployment basándose en métricas (CPU, Memory). Definido en `helm/todoapp/templates/hpa.yaml`.
+Escala el **número de réplicas** de un Deployment basándose en métricas (CPU, Memory). 
+- Configurado en: `ansible/inventories/gcp/group_vars/all.yml`
+- Aplicado vía: Helm template `hpa.yaml`
+- Frecuencia: Evalúa cada 15 segundos, escala cada 3 minutos
 
 ### Cluster Autoscaler
-Escala el **número de nodos** del cluster cuando hay pods en estado Pending por falta de recursos. Configurado al crear el cluster GKE.
+Escala el **número de nodos** del cluster cuando hay pods en estado Pending por falta de recursos. 
+- Configurado: Al crear el cluster GKE con `--enable-autoscaling`
+- Trigger: Pods Pending por >30 segundos
+- Scale-up: ~3-5 minutos (crear nodo + inicializar)
+- Scale-down: ~10-15 minutos (espera de inactividad)
 
-### Ansible como IaC
-Automatiza la creación de infraestructura usando comandos `gcloud` y `kubectl` dentro de playbooks YAML. Alternativa a Terraform, más simple para este caso de uso.
+### Ansible como IaC + Orquestador
+Automatiza **toda la stack** integrando múltiples herramientas:
+- **Infraestructura**: `gcloud` para crear VPC, GKE
+- **Imágenes**: `docker` para build/push a GCR
+- **Despliegue**: `helm` para instalar aplicación
+- **Configuración**: Templates Jinja2 para valores dinámicos
+- **Idempotencia**: Tasks con `failed_when`, `changed_when`
+
+**Ventaja sobre Terraform**: Menos verboso para orquestación de comandos CLI. Perfecto para este use case específico.
 
 ### Nginx Reverse Proxy
 El frontend usa nginx para hacer proxy de `/api/*` al backend, evitando problemas de CORS y simplificando la configuración.

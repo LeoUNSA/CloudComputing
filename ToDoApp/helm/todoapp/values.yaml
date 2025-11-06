@@ -62,18 +62,18 @@ ingress:
 resources:
   backend:
     limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
       cpu: 200m
       memory: 256Mi
-    requests:
-      cpu: 100m
-      memory: 128Mi
   frontend:
     limits:
-      cpu: 200m
-      memory: 256Mi
+      cpu: 400m
+      memory: 512Mi
     requests:
-      cpu: 100m
-      memory: 128Mi
+      cpu: 150m
+      memory: 256Mi
   postgres:
     limits:
       cpu: 500m
@@ -86,14 +86,14 @@ autoscaling:
   enabled: false
   backend:
     minReplicas: 2
-    maxReplicas: 10
-    targetCPUUtilizationPercentage: 50
-    targetMemoryUtilizationPercentage: 70
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 30
+    targetMemoryUtilizationPercentage: 50
   frontend:
     minReplicas: 2
-    maxReplicas: 8
-    targetCPUUtilizationPercentage: 60
-    targetMemoryUtilizationPercentage: 75
+    maxReplicas: 15
+    targetCPUUtilizationPercentage: 35
+    targetMemoryUtilizationPercentage: 55
 
 nodeSelector: {}
 

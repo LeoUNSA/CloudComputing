@@ -13,6 +13,12 @@
   command: helm repo update
   changed_when: false
 
+- name: Check if metrics-server deployment exists
+  command: kubectl get deployment metrics-server -n kube-system
+  register: metrics_check
+  failed_when: false
+  changed_when: false
+
 - name: Install metrics-server for HPA
   command: >
     helm upgrade --install metrics-server metrics-server/metrics-server
@@ -20,11 +26,20 @@
     --set args[0]="--kubelet-insecure-tls"
     --set args[1]="--kubelet-preferred-address-types=InternalIP"
   register: metrics_result
+  when: metrics_check.rc != 0
+  failed_when: false
   changed_when: "'has been upgraded' in metrics_result.stdout or 'has been installed' in metrics_result.stdout"
 
+- name: Display metrics-server status
+  debug:
+    msg: "Metrics-server already exists, skipping installation"
+  when: metrics_check.rc == 0
+
 - name: Wait for metrics-server to be ready
-  command: kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=metrics-server -n kube-system --timeout=180s
+  command: kubectl wait --for=condition=ready pod -l k8s-app=metrics-server -n kube-system --timeout=180s
   changed_when: false
+  failed_when: false
+  when: metrics_check.rc != 0
 
 - name: Create values override file for GCP deployment
   copy:
@@ -104,13 +119,11 @@
 - name: Deploy TodoApp using Helm
   command: >
     helm upgrade --install {{ helm_release_name }}
-    {{ helm_chart_path }}
+    {{ playbook_dir }}/../helm/todoapp
     --namespace {{ app_namespace }}
     --values /tmp/values-gcp-autoscaling.yaml
     --wait
     --timeout 10m
-  args:
-    chdir: "{{ playbook_dir }}/.."
   register: helm_result
   changed_when: "'has been upgraded' in helm_result.stdout or 'has been installed' in helm_result.stdout"
 

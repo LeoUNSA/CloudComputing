@@ -33,16 +33,16 @@ autoscaling:
   # Backend HPA Configuration
   backend:
     min_replicas: 2
-    max_replicas: 10
-    target_cpu_utilization: 50
-    target_memory_utilization: 70
+    max_replicas: 20
+    target_cpu_utilization: 30
+    target_memory_utilization: 50
     
   # Frontend HPA Configuration
   frontend:
     min_replicas: 2
-    max_replicas: 8
-    target_cpu_utilization: 60
-    target_memory_utilization: 75
+    max_replicas: 15
+    target_cpu_utilization: 35
+    target_memory_utilization: 55
 
 # Application Configuration
 app_namespace: "todoapp"

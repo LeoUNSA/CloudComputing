@@ -92,6 +92,7 @@
   register: cluster_result
   failed_when: 
     - cluster_result.rc != 0
+    - "'Already exists' not in cluster_result.stderr"
     - "'already exists' not in cluster_result.stderr"
   changed_when: cluster_result.rc == 0
 

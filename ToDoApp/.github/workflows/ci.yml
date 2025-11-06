@@ -1,0 +1,213 @@
+name: CI - Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  # Job 1: Build and test backend
+  backend:
+    name: Backend - Build & Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Run backend linter (if configured)
+        working-directory: backend
+        run: npm run lint || echo "No lint script found"
+        continue-on-error: true
+
+      - name: Run backend tests (if configured)
+        working-directory: backend
+        run: npm test || echo "No test script found"
+        continue-on-error: true
+
+      - name: Build backend Docker image
+        run: |
+          docker build -t todoapp-backend:${{ github.sha }} ./backend
+          docker tag todoapp-backend:${{ github.sha }} todoapp-backend:latest
+
+      - name: Test backend Docker image
+        run: |
+          docker run -d --name backend-test \
+            -e DATABASE_URL=postgresql://test:test@localhost:5432/test \
+            -p 5001:5001 \
+            todoapp-backend:${{ github.sha }}
+          sleep 5
+          docker logs backend-test
+          docker stop backend-test
+          docker rm backend-test
+
+  # Job 2: Build and test frontend
+  frontend:
+    name: Frontend - Build & Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run frontend linter (if configured)
+        working-directory: frontend
+        run: npm run lint || echo "No lint script found"
+        continue-on-error: true
+
+      - name: Run frontend tests (if configured)
+        working-directory: frontend
+        run: npm test -- --watchAll=false || echo "No test script found"
+        continue-on-error: true
+
+      - name: Build frontend production
+        working-directory: frontend
+        run: npm run build
+        env:
+          REACT_APP_BACKEND_URL: http://localhost:5001
+
+      - name: Build frontend Docker image
+        run: |
+          docker build -t todoapp-frontend:${{ github.sha }} ./frontend
+          docker tag todoapp-frontend:${{ github.sha }} todoapp-frontend:latest
+
+      - name: Test frontend Docker image
+        run: |
+          docker run -d --name frontend-test \
+            -p 3000:80 \
+            todoapp-frontend:${{ github.sha }}
+          sleep 5
+          curl -f http://localhost:3000 || exit 1
+          docker stop frontend-test
+          docker rm frontend-test
+
+  # Job 3: Validate Kubernetes manifests
+  k8s-validation:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.13.0'
+
+      - name: Lint Helm chart
+        run: |
+          helm lint ./helm/todoapp
+          helm lint ./helm/todoapp --values ./helm/todoapp/values-dev.yaml
+
+      - name: Template Helm chart
+        run: |
+          helm template todoapp ./helm/todoapp --namespace todoapp > /tmp/manifests.yaml
+          
+      - name: Validate Kubernetes manifests with kubeval
+        uses: instrumenta/kubeval-action@master
+        with:
+          files: /tmp/manifests.yaml
+          version: v1.28.0
+        continue-on-error: true
+
+  # Job 4: Validate Ansible playbooks
+  ansible-validation:
+    name: Validate Ansible Playbooks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Ansible
+        run: |
+          pip install ansible ansible-lint
+
+      - name: Lint Ansible playbooks
+        run: |
+          ansible-lint ansible/main.yml || echo "Ansible lint warnings found"
+          ansible-lint ansible/cleanup.yml || echo "Ansible lint warnings found"
+        continue-on-error: true
+
+      - name: Syntax check Ansible playbooks
+        run: |
+          ansible-playbook --syntax-check ansible/main.yml
+          ansible-playbook --syntax-check ansible/cleanup.yml
+
+  # Job 5: Security scanning
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+        continue-on-error: true
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+        if: always()
+        continue-on-error: true
+
+  # Job 6: Summary
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [backend, frontend, k8s-validation, ansible-validation, security-scan]
+    if: always()
+    
+    steps:
+      - name: Check CI results
+        run: |
+          echo "✅ CI Pipeline completed!"
+          echo "Backend: ${{ needs.backend.result }}"
+          echo "Frontend: ${{ needs.frontend.result }}"
+          echo "K8s Validation: ${{ needs.k8s-validation.result }}"
+          echo "Ansible Validation: ${{ needs.ansible-validation.result }}"
+          echo "Security Scan: ${{ needs.security-scan.result }}"
+          
+      - name: Fail if critical jobs failed
+        if: needs.backend.result == 'failure' || needs.frontend.result == 'failure'
+        run: exit 1

@@ -7,7 +7,7 @@ set -e
 
 NAMESPACE="${NAMESPACE:-todoapp}"
 SERVICE_NAME="${SERVICE_NAME:-todoapp-backend}"
-PODS_COUNT="${PODS_COUNT:-20}"
+PODS_COUNT="${PODS_COUNT:-40}"
 
 # Colores
 GREEN='\033[0;32m'

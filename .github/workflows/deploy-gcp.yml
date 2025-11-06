@@ -74,7 +74,7 @@ jobs:
 
       - name: Deploy with Ansible
         run: |
-          ansible-playbook -i ToDoApp/ansible/inventories/gcp/hosts.yml ansible/main.yml \
+          ansible-playbook -i ToDoApp/ansible/inventories/gcp/hosts.yml ToDoApp/ansible/main.yml \
             -e "gcp_project_id=${{ env.GCP_PROJECT_ID }}" \
             -e "gcp_region=${{ env.GCP_REGION }}" \
             -e "gcp_zone=${{ env.GCP_ZONE }}" \

@@ -100,7 +100,7 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.skip_confirmation }}" == "true" ]; then
             # Skip interactive confirmation
-            ansible-playbook -i ToDoApp/ansible/inventories/gcp/hosts.yml ansible/cleanup.yml \
+            ansible-playbook -i ToDoApp/ansible/inventories/gcp/hosts.yml ToDoApp/ansible/cleanup.yml \
               -e "gcp_project_id=${{ env.GCP_PROJECT_ID }}" \
               -e "gcp_region=${{ env.GCP_REGION }}" \
               -e "gcp_zone=${{ env.GCP_ZONE }}" \
@@ -110,7 +110,7 @@ jobs:
           else
             # This won't work well in CI as it requires interactive input
             # Consider modifying cleanup.yml to accept environment variable
-            echo "yes" | ansible-playbook -i ToDoApp/ansible/inventories/gcp/hosts.yml ansible/cleanup.yml \
+            echo "yes" | ansible-playbook -i ToDoApp/ansible/inventories/gcp/hosts.yml ToDoApp/ansible/cleanup.yml \
               -e "gcp_project_id=${{ env.GCP_PROJECT_ID }}" \
               -e "gcp_region=${{ env.GCP_REGION }}" \
               -e "gcp_zone=${{ env.GCP_ZONE }}" \

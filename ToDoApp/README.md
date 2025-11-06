@@ -1,17 +1,233 @@
-# ToDoApp - Demostración de Autoscaling en GCP con Ansible
+# ToDoApp - Autoscaling Demo en GCP con Ansible
 
-Aplicación web de tareas (ToDo) desplegada en **Google Kubernetes Engine (GKE)** utilizando **Ansible** como herramienta de Infrastructure as Code (IaC) y configurada con **autoscaling automático** a nivel de pods y nodos.
+> **Demostración de autoscaling automático en Kubernetes (GKE) usando Ansible como IaC**
+
+Aplicación web de tareas (ToDo) desplegada completamente en **Google Kubernetes Engine (GKE)** utilizando **Ansible** como única herramienta de Infrastructure as Code. Incluye autoscaling horizontal de pods (HPA) y autoscaling de nodos del cluster (Cluster Autoscaler).
 
 ---
 
-## 🎯 Características Principales
+## 🎯 Lo Importante: Despliegue con Ansible
 
-- **Ansible** como única herramienta IaC (no usa Terraform, CloudFormation, etc.)
-- **HPA (Horizontal Pod Autoscaler)** para escalar pods automáticamente
-- **Cluster Autoscaler** de GKE para escalar nodos según demanda
-- **Despliegue completamente automatizado** con un solo comando
-- **Monitoreo de métricas** con metrics-server
-- **Load testing** integrado para demostrar autoscaling
+Este proyecto está diseñado para **desplegar toda la infraestructura con Ansible**, desde cero hasta producción, con un solo comando:
+
+```bash
+ansible-playbook -i ansible/inventories/gcp/hosts.yml ansible/main.yml
+```
+
+### ¿Qué hace este playbook?
+
+1. ✅ **Habilita APIs de GCP** (Compute, Container, Container Registry)
+2. ✅ **Crea infraestructura de red** (VPC custom y subnet)
+3. ✅ **Crea cluster GKE** con autoscaling habilitado (2-10 nodos)
+4. ✅ **Configura kubectl** con las credenciales del cluster
+5. ✅ **Construye imágenes Docker** (backend y frontend)
+6. ✅ **Sube imágenes a GCR** (Google Container Registry)
+7. ✅ **Instala metrics-server** (si no está presente)
+8. ✅ **Despliega la aplicación** vía Helm con HPA configurado
+9. ✅ **Espera a que todo esté listo** y muestra la IP externa
+
+**Tiempo estimado:** 8-12 minutos
+
+### Destruir toda la infraestructura
+
+Cuando termines, destruye todo para evitar cargos:
+
+```bash
+ansible-playbook -i ansible/inventories/gcp/hosts.yml ansible/cleanup.yml
+```
+
+Esto elimina: cluster GKE, VPC, subnet, imágenes, load balancers, discos, etc.
+
+---
+
+## � Requisitos Previos
+
+### 1. Instalar herramientas necesarias
+
+```bash
+# Arch Linux
+sudo pacman -S google-cloud-sdk kubectl helm docker ansible
+
+# Ubuntu/Debian
+sudo apt update
+sudo apt install google-cloud-sdk kubectl helm docker.io ansible
+
+# Iniciar Docker
+sudo systemctl start docker
+```
+
+### 2. Configurar GCP
+
+```bash
+# Autenticar
+gcloud auth login
+
+# Configurar proyecto (reemplaza con tu project ID)
+gcloud config set project todoapp-autoscaling-demo
+
+# Habilitar billing (REQUERIDO para GKE)
+# Visita: https://console.cloud.google.com/billing
+
+# Configurar Docker para GCR
+gcloud auth configure-docker
+```
+
+### 3. Configurar variables de Ansible
+
+Edita `ansible/inventories/gcp/group_vars/all.yml`:
+
+```yaml
+# GCP Configuration
+gcp_project_id: "tu-proyecto-id"        # ← CAMBIAR ESTO
+gcp_region: "us-central1"
+gcp_zone: "us-central1-a"
+
+# GKE Cluster
+gke_cluster_name: "todoapp-autoscaling-cluster"
+gke_cluster_version: "latest"
+
+# Autoscaling
+gke_node_pool:
+  min_node_count: 2
+  max_node_count: 10
+  machine_type: "e2-standard-2"
+```
+
+---
+
+## 🚀 Despliegue Completo con Ansible
+
+### Paso 1: Clonar repositorio
+
+```bash
+git clone https://github.com/LeoUNSA/CloudComputing.git
+cd CloudComputing/ToDoApp
+```
+
+### Paso 2: Editar configuración
+
+```bash
+# Editar variables (especialmente gcp_project_id)
+nano ansible/inventories/gcp/group_vars/all.yml
+```
+
+### Paso 3: Desplegar infraestructura
+
+```bash
+# Despliegue completo (un solo comando)
+ansible-playbook -i ansible/inventories/gcp/hosts.yml ansible/main.yml
+
+# Con output verbose (recomendado para la primera vez)
+ansible-playbook -i ansible/inventories/gcp/hosts.yml ansible/main.yml -v
+```
+
+### Paso 4: Verificar despliegue
+
+```bash
+# Obtener credenciales del cluster
+gcloud container clusters get-credentials todoapp-autoscaling-cluster \
+  --zone=us-central1-a \
+  --project=tu-proyecto-id
+
+# Ver pods
+kubectl get pods -n todoapp
+
+# Ver servicios y obtener IP externa
+kubectl get svc -n todoapp
+
+# Ver HPA
+kubectl get hpa -n todoapp
+
+# Ver nodos
+kubectl get nodes
+```
+
+### Paso 5: Acceder a la aplicación
+
+```bash
+# Obtener IP externa
+kubectl get svc todoapp-frontend -n todoapp -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+
+# Acceder en el browser
+# http://<EXTERNAL-IP>:3000
+```
+
+---
+
+## 🔧 Estructura de Ansible
+
+### Playbooks principales
+
+```
+ansible/
+├── main.yml                 # Playbook de despliegue
+├── cleanup.yml              # Playbook de limpieza
+├── inventories/
+│   └── gcp/
+│       ├── hosts.yml        # Inventory (localhost)
+│       └── group_vars/
+│           └── all.yml      # Variables de configuración
+└── tasks/
+    ├── setup-gke-cluster.yml       # Crear GKE y networking
+    ├── build-and-push-images.yml   # Construir/subir imágenes
+    └── deploy-app.yml              # Desplegar app con Helm
+```
+
+### Variables configurables
+
+Todas en `ansible/inventories/gcp/group_vars/all.yml`:
+
+| Variable | Descripción | Default |
+|----------|-------------|---------|
+| `gcp_project_id` | ID del proyecto GCP | `todoapp-autoscaling-demo` |
+| `gcp_region` | Región de GCP | `us-central1` |
+| `gcp_zone` | Zona de GCP | `us-central1-a` |
+| `gke_cluster_name` | Nombre del cluster | `todoapp-autoscaling-cluster` |
+| `min_node_count` | Nodos mínimos | `2` |
+| `max_node_count` | Nodos máximos | `10` |
+| `machine_type` | Tipo de máquina | `e2-standard-2` |
+
+### Personalizar el despliegue
+
+```bash
+# Cambiar proyecto por línea de comandos
+ansible-playbook -i ansible/inventories/gcp/hosts.yml ansible/main.yml \
+  -e "gcp_project_id=mi-proyecto" \
+  -e "gcp_region=europe-west1"
+
+# Cambiar tamaño del cluster
+ansible-playbook -i ansible/inventories/gcp/hosts.yml ansible/main.yml \
+  -e "gke_node_pool.min_node_count=3" \
+  -e "gke_node_pool.max_node_count=20"
+```
+
+---
+
+## 🧹 Limpieza de Recursos
+
+### Destruir todo con Ansible
+
+```bash
+# Eliminar cluster, VPC, imágenes, todo
+ansible-playbook -i ansible/inventories/gcp/hosts.yml ansible/cleanup.yml
+
+# Sin confirmación (para CI/CD)
+ansible-playbook -i ansible/inventories/gcp/hosts.yml ansible/cleanup.yml \
+  -e "confirm_user_input=yes"
+```
+
+### Verificar que no queden recursos
+
+```bash
+# Listar clusters
+gcloud container clusters list --project=tu-proyecto-id
+
+# Listar redes (excepto default)
+gcloud compute networks list --project=tu-proyecto-id
+
+# Listar discos
+gcloud compute disks list --project=tu-proyecto-id
+```
 
 ---
 
@@ -19,66 +235,15 @@ Aplicación web de tareas (ToDo) desplegada en **Google Kubernetes Engine (GKE)*
 
 | Componente | Tecnología |
 |------------|------------|
-| **IaC** | Ansible |
+| **IaC** | Ansible (playbooks, no Terraform) |
 | **Cloud** | Google Cloud Platform (GKE) |
-| **Orquestación** | Kubernetes + Helm |
+| **Orquestación** | Kubernetes 1.28+ |
+| **Package Manager** | Helm 3 |
 | **Backend** | Node.js + Express + PostgreSQL |
 | **Frontend** | React + Nginx |
 | **Autoscaling** | HPA v2 + GKE Cluster Autoscaler |
-| **Registro** | Google Container Registry (GCR) |
-
----
-
-## 🚀 Quick Start
-
-### Prerequisitos
-
-```bash
-# Herramientas necesarias
-- gcloud CLI
-- kubectl
-- helm
-- docker
-- ansible
-
-# Cuenta GCP con billing habilitado
-```
-
-### Instalación (Arch Linux)
-
-```bash
-sudo pacman -S google-cloud-sdk kubectl helm docker ansible
-sudo systemctl start docker
-```
-
-### Configuración y Despliegue
-
-```bash
-# 1. Clonar repositorio
-git clone <repository-url>
-cd ToDoApp
-
-# 2. Autenticar en GCP
-gcloud auth login
-gcloud config set project <TU_PROJECT_ID>
-
-# 3. Configurar Docker para GCR
-gcloud auth configure-docker
-
-# 4. Editar variables de Ansible
-nano ansible/inventories/gcp/group_vars/all.yml
-# Cambiar: gcp_project_id: "TU_PROJECT_ID"
-
-# 5. Vincular billing
-gcloud billing projects link <TU_PROJECT_ID> --billing-account=<BILLING_ID>
-
-# 6. Desplegar (10-15 minutos)
-ansible-playbook -i ansible/inventories/gcp/hosts.yml ansible/main.yml
-
-# 7. Obtener URL de la aplicación
-kubectl get svc todoapp-frontend -n todoapp
-# Acceder a http://<EXTERNAL-IP>:3000
-```
+| **Container Registry** | Google Container Registry (GCR) |
+| **CI/CD** | GitHub Actions |
 
 ---
 
@@ -191,121 +356,252 @@ kubectl delete pod -n todoapp -l run=load-gen-1
 
 ---
 
-## 📁 Estructura del Proyecto
+## 🧪 Demostración de Autoscaling
+
+Una vez desplegado con Ansible, puedes probar el autoscaling:
+
+### 1. Generar carga al backend
+
+```bash
+# Usar el script de load testing
+./load-testing/simple-load-test.sh
+
+# O crear generadores de carga manualmente
+for i in {1..5}; do
+  kubectl run load-gen-$i --image=busybox --restart=Never -n todoapp -- \
+    /bin/sh -c "while true; do wget -q -O- http://todoapp-backend:5001/stress?duration=40000; done"
+done
+```
+
+### 2. Monitorear el autoscaling
+
+```bash
+# Opción 1: Usar el script de monitoreo
+./load-testing/monitor-autoscaling.sh
+
+# Opción 2: Monitorear manualmente (3 terminales)
+# Terminal 1 - HPA
+watch -n 2 'kubectl get hpa -n todoapp'
+
+# Terminal 2 - Nodos
+watch -n 5 'kubectl get nodes'
+
+# Terminal 3 - Pods
+watch -n 2 'kubectl get pods -n todoapp'
+```
+
+### 3. Comportamiento esperado
+
+```
+T=0min:  2 pods backend, 2 nodos, CPU ~5%
+         ↓ Generar carga
+T=1min:  CPU → 85%, HPA escala → 4 pods
+T=2min:  HPA escala → 6 pods
+T=3min:  HPA escala → 8 pods
+T=4min:  HPA escala → 10 pods (máximo configurado)
+T=5min:  Algunos pods → "Pending" (no hay recursos)
+T=7min:  Cluster Autoscaler añade nodo #3
+         Todos los pods → "Running"
+T=10min: Si sigue la carga, puede añadir más nodos
+```
+
+### 4. Limpiar la carga
+
+```bash
+# Eliminar generadores de carga
+kubectl delete pod -n todoapp -l run=load-gen
+
+# Observar scale-down automático (5-10 minutos)
+# - HPA reduce pods gradualmente
+# - Cluster Autoscaler elimina nodos infrautilizados
+```
+
+**� Documentación detallada:** Ver `docs/05-MANUAL-AUTOSCALING-TEST.md`
+
+---
+
+## �📁 Estructura del Proyecto
 
 ```
 ToDoApp/
-├── ansible/                          # Infrastructure as Code
-│   ├── main.yml                      # Playbook principal
+├── ansible/                          # ⭐ Infrastructure as Code (lo importante)
+│   ├── main.yml                      # Playbook de despliegue
 │   ├── cleanup.yml                   # Playbook de limpieza
 │   ├── inventories/gcp/
-│   │   └── group_vars/all.yml        # Variables de configuración
+│   │   ├── hosts.yml                 # Inventory (localhost)
+│   │   └── group_vars/
+│   │       └── all.yml               # ⚙️ Variables de configuración
 │   └── tasks/
-│       ├── setup-gke-cluster.yml     # Crear cluster GKE
-│       ├── build-and-push-images.yml # Build/push Docker
-│       └── deploy-app.yml            # Deploy con Helm
+│       ├── setup-gke-cluster.yml     # Crea GKE, VPC, subnet
+│       ├── build-and-push-images.yml # Build/push a GCR
+│       └── deploy-app.yml            # Deploy con Helm + HPA
 │
-├── backend/                          # Backend Node.js
-│   ├── server.js                     # API + endpoint /stress
-│   └── Dockerfile
+├── .github/workflows/                # CI/CD con GitHub Actions
+│   ├── ci.yml                        # Build/test automático
+│   ├── deploy-gcp.yml                # Deploy con Ansible
+│   └── cleanup-gcp.yml               # Cleanup de recursos
 │
-├── frontend/                         # Frontend React
-│   ├── nginx.conf                    # Reverse proxy /api
-│   └── Dockerfile
-│
-├── helm/todoapp/                     # Helm Chart
+├── helm/todoapp/                     # Helm Chart de la aplicación
 │   ├── values.yaml                   # Configuración
+│   ├── values-dev.yaml               # Config para desarrollo
 │   └── templates/
-│       ├── hpa.yaml                  # HPA para backend/frontend
+│       ├── hpa.yaml                  # Horizontal Pod Autoscaler
 │       ├── backend-deployment.yaml
 │       ├── frontend-deployment.yaml
 │       └── postgres-deployment.yaml
 │
+├── backend/                          # API Node.js + Express
+│   ├── server.js                     # Incluye endpoint /stress
+│   ├── package.json
+│   └── Dockerfile
+│
+├── frontend/                         # React SPA
+│   ├── src/App.js
+│   ├── nginx.conf                    # Reverse proxy a backend
+│   └── Dockerfile
+│
 ├── docs/                             # Documentación detallada
 │   ├── 01-ANSIBLE-DEPLOYMENT.md
 │   ├── 02-AUTOSCALING-MECHANISMS.md
-│   ├── 03-CLOUD-ARCHITECTURE.md
-│   ├── 04-DEPLOYMENT-COMMANDS.md
 │   ├── 05-MANUAL-AUTOSCALING-TEST.md
-│   └── 06-LOAD-GENERATION-INTERNALS.md
+│   └── ...
 │
-└── load-testing/                     # Scripts de pruebas
-    ├── simple-load-test.sh
-    ├── monitor-autoscaling.sh
-    └── extreme-load-test.sh
+├── load-testing/                     # Scripts de pruebas de carga
+│   ├── simple-load-test.sh
+│   ├── monitor-autoscaling.sh
+│   └── extreme-load-test.sh
+│
+├── ANSIBLE-DEPLOYMENT.md             # 📖 Guía completa de Ansible
+└── README.md                         # Este archivo
 ```
 
 ---
 
-## 🤖 Automatización con Ansible
+---
 
-### Playbooks Disponibles
+## � Documentación
+
+- **[ANSIBLE-DEPLOYMENT.md](ANSIBLE-DEPLOYMENT.md)** - Guía completa de despliegue con Ansible
+- **[.github/SETUP.md](.github/SETUP.md)** - Setup de GitHub Actions CI/CD
+- **[docs/01-ANSIBLE-DEPLOYMENT.md](docs/01-ANSIBLE-DEPLOYMENT.md)** - Detalles técnicos de Ansible
+- **[docs/02-AUTOSCALING-MECHANISMS.md](docs/02-AUTOSCALING-MECHANISMS.md)** - Cómo funciona el autoscaling
+- **[docs/05-MANUAL-AUTOSCALING-TEST.md](docs/05-MANUAL-AUTOSCALING-TEST.md)** - Pruebas manuales de autoscaling
+
+---
+
+## 🚨 Troubleshooting
+
+### Error: "Billing not enabled"
+```bash
+# Habilitar billing en: https://console.cloud.google.com/billing
+gcloud billing projects link tu-proyecto-id --billing-account=BILLING_ID
+```
+
+### Error: "API not enabled"
+```bash
+# Ansible lo hace automáticamente, pero manualmente:
+gcloud services enable compute.googleapis.com
+gcloud services enable container.googleapis.com
+```
+
+### Error: "Permission denied"
+```bash
+# Verificar autenticación
+gcloud auth list
+gcloud auth login
+```
+
+### Cluster no escala
+```bash
+# Verificar metrics-server
+kubectl get deployment metrics-server -n kube-system
+
+# Verificar HPA
+kubectl describe hpa -n todoapp
+
+# Ver eventos del cluster autoscaler
+kubectl get events -n kube-system | grep cluster-autoscaler
+```
+
+---
+
+## 💰 Gestión de Costos
+
+### Estimación de costos (GCP us-central1)
+
+| Recurso | Configuración | Costo/hora aprox. |
+|---------|---------------|-------------------|
+| GKE cluster | Gratis | $0.00 |
+| 2 nodos e2-standard-2 | 2 vCPU, 8GB RAM cada uno | ~$0.13 |
+| Load Balancer | 1 regla | ~$0.025 |
+| Persistent Disk | 10GB SSD | ~$0.0002 |
+| **Total** | **Mínimo** | **~$0.16/hora** |
+
+**Costo diario mínimo:** ~$3.84  
+**Costo mensual mínimo (24/7):** ~$115
+
+### Reducir costos
 
 ```bash
-# Despliegue completo
-ansible-playbook -i ansible/inventories/gcp/hosts.yml ansible/main.yml
-
-# Solo crear cluster
-ansible-playbook ansible/main.yml --tags cluster
-
-# Solo build/push imágenes
-ansible-playbook ansible/main.yml --tags build,images
-
-# Solo deploy aplicación
-ansible-playbook ansible/main.yml --tags deploy
-
-# Limpieza completa
+# 1. Destruir cuando no uses (RECOMENDADO)
 ansible-playbook -i ansible/inventories/gcp/hosts.yml ansible/cleanup.yml
+
+# 2. Reducir número de nodos mínimos
+# Editar: ansible/inventories/gcp/group_vars/all.yml
+gke_node_pool:
+  min_node_count: 1  # En vez de 2
+  max_node_count: 5
 ```
 
-### Lo que Hace Ansible
+### Monitorear costos
 
-1. **Setup GKE Cluster** (`tasks/setup-gke-cluster.yml`):
-   - Habilita APIs de GCP (Compute, Container, Registry)
-   - Crea VPC network y subnet
-   - Crea cluster GKE con autoscaling habilitado
-   - Configura kubectl credentials
-   - Crea namespace `todoapp`
+```bash
+# Ver gastos actuales
+gcloud billing accounts list
+gcloud billing projects describe tu-proyecto-id
 
-2. **Build & Push Images** (`tasks/build-and-push-images.yml`):
-   - Construye imagen Docker del backend
-   - Construye imagen Docker del frontend
-   - Sube ambas imágenes a GCR
-
-3. **Deploy App** (`tasks/deploy-app.yml`):
-   - Instala metrics-server (si no existe)
-   - Genera values YAML para Helm con configuraciones de autoscaling
-   - Despliega aplicación usando Helm chart
-   - Espera a que deployments estén listos
-   - Muestra IP del LoadBalancer
+# Configurar alertas: https://console.cloud.google.com/billing/alerts
+```
 
 ---
 
-## 📊 Arquitectura Cloud
+## 🤝 Contribuciones
 
-```
-Internet
-   │
-   ▼
-Google Cloud Load Balancer (IP externa)
-   │
-   ▼
-Frontend Pods (2-8 réplicas) ─── HPA
-   │ (nginx reverse proxy)
-   │
-   ▼ /api/*
-Backend Pods (2-10 réplicas) ─── HPA
-   │
-   ▼
-PostgreSQL Pod
-   │
-   ▼
-Persistent Disk (10GB)
+Las contribuciones son bienvenidas. Por favor:
 
-Nodos: 2-10 (e2-standard-2) ─── Cluster Autoscaler
-```
+1. Fork el repositorio
+2. Crea una rama para tu feature (`git checkout -b feature/amazing-feature`)
+3. Commit tus cambios (`git commit -m 'Add amazing feature'`)
+4. Push a la rama (`git push origin feature/amazing-feature`)
+5. Abre un Pull Request
 
-### Componentes de Red
+---
+
+## 📄 Licencia
+
+Este proyecto está bajo la licencia MIT.
+
+---
+
+## ✨ Autor
+
+**Leo** - [@LeoUNSA](https://github.com/LeoUNSA)
+
+---
+
+## � Agradecimientos
+
+- Google Cloud Platform por la infraestructura
+- Kubernetes por la orquestación
+- Ansible por la automatización IaC
+- Helm por el package management
+
+---
+
+## 📞 Soporte
+
+¿Problemas con el despliegue? Abre un issue en GitHub:
+https://github.com/LeoUNSA/CloudComputing/issues
 
 - **VPC Network**: `todoapp-network` (10.0.0.0/24)
 - **Service Frontend**: LoadBalancer (expuesto a Internet)

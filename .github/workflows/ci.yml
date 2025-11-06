@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: ToDoApp/backend/package-lock.json
+          cache-dependency-path: '**/package-lock.json'
 
       - name: Install backend dependencies
         working-directory: ToDoApp/backend
@@ -70,7 +70,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: ToDoApp/frontend/package-lock.json
+          cache-dependency-path: '**/package-lock.json'
 
       - name: Install frontend dependencies
         working-directory: ToDoApp/frontend
@@ -124,11 +124,11 @@ jobs:
       - name: Lint Helm chart
         run: |
           helm lint ./ToDoApp/helm/todoapp
-          helm lint ./ToDoApp/helm/todoapp --values ./helm/todoapp/values-dev.yaml
+          helm lint ./ToDoApp/helm/todoapp --values ./ToDoApp/helm/todoapp/values-dev.yaml
 
       - name: Template Helm chart
         run: |
-          helm template todoapp ./helm/todoapp --namespace todoapp > /tmp/manifests.yaml
+          helm template todoapp ./ToDoApp/helm/todoapp --namespace todoapp > /tmp/manifests.yaml
           
       - name: Validate Kubernetes manifests with kubeval
         uses: instrumenta/kubeval-action@master
@@ -170,7 +170,11 @@ jobs:
   security-scan:
     name: Security Scanning
     runs-on: ubuntu-latest
-    
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

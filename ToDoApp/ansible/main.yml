@@ -2,23 +2,23 @@
 # Playbook principal - Ejecuta todo el flujo de deployment
 - name: Complete GKE AutoScaling Deployment Pipeline
   hosts: localhost
-  gather_facts: yes
-  
+  gather_facts: true
+
   tasks:
     - name: Step 1 - Setup GKE Cluster
-      include_tasks: tasks/setup-gke-cluster.yml
+      ansible.builtin.include_tasks: tasks/setup-gke-cluster.yml
       tags: [cluster, setup]
-      
+
     - name: Step 2 - Build and Push Docker Images
-      include_tasks: tasks/build-and-push-images.yml
+      ansible.builtin.include_tasks: tasks/build-and-push-images.yml
       tags: [build, images]
-      
+
     - name: Step 3 - Deploy Application
-      include_tasks: tasks/deploy-app.yml
+      ansible.builtin.include_tasks: tasks/deploy-app.yml
       tags: [deploy, app]
-      
+
     - name: Display final summary
-      debug:
+      ansible.builtin.debug:
         msg:
           - "=========================================="
           - "  TodoApp Deployment Complete!"

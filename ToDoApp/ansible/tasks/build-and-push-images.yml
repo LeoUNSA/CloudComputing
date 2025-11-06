@@ -1,7 +1,7 @@
 ---
 # Tareas para construir y subir imágenes Docker a GCR
 - name: Set image variables
-  set_fact:
+  ansible.builtin.set_fact:
     backend_image: "{{ docker_registry }}/todoapp-backend:{{ image_tag }}"
     frontend_image: "{{ docker_registry }}/todoapp-frontend:{{ image_tag }}"
 

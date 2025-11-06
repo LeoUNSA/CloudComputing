@@ -247,7 +247,61 @@ gcloud compute disks list --project=tu-proyecto-id
 
 ---
 
-## 🔧 Configuración de Autoscaling
+## � Integración Continua (CI/CD)
+
+El proyecto incluye **GitHub Actions workflows** para automatizar build, testing y deployment.
+
+### Workflows Disponibles
+
+| Workflow | Trigger | Descripción |
+|----------|---------|-------------|
+| **CI** | Push/PR a `main` o `develop` | Build, test, validación de manifiestos y security scan |
+| **Deploy** | Push a `main` (o manual) | Despliegue completo a GKE con Ansible |
+| **Cleanup** | Manual | Destrucción de toda la infraestructura GCP |
+
+### Configuración Rápida
+
+1. **Crear Service Account de GCP:**
+   ```bash
+   gcloud iam service-accounts create github-actions-deployer \
+     --project=tu-proyecto-id
+   
+   # Otorgar permisos
+   gcloud projects add-iam-policy-binding tu-proyecto-id \
+     --member="serviceAccount:github-actions-deployer@tu-proyecto-id.iam.gserviceaccount.com" \
+     --role="roles/container.admin"
+   
+   # (Repetir para: compute.admin, storage.admin, iam.serviceAccountUser)
+   
+   # Crear clave JSON
+   gcloud iam service-accounts keys create ~/gcp-key.json \
+     --iam-account=github-actions-deployer@tu-proyecto-id.iam.gserviceaccount.com
+   ```
+
+2. **Configurar GitHub Secret:**
+   - Ve a: `https://github.com/LeoUNSA/CloudComputing/settings/secrets/actions`
+   - Agrega `GCP_SA_KEY` con el contenido de `gcp-key.json`
+
+3. **Ejecutar workflows:**
+   ```bash
+   # Ver workflows disponibles
+   gh workflow list
+   
+   # Deploy manual
+   gh workflow run "CD - Deploy to GCP"
+   
+   # Cleanup manual
+   gh workflow run "Cleanup - Destroy GCP Resources" -f confirm=destroy
+   
+   # Ver estado
+   gh run list
+   ```
+
+**📖 Guía completa:** [.github/SETUP.md](.github/SETUP.md)
+
+---
+
+## �🔧 Configuración de Autoscaling
 
 ### HPA (Horizontal Pod Autoscaler)
 
@@ -356,65 +410,100 @@ kubectl delete pod -n todoapp -l run=load-gen-1
 
 ---
 
-## 🧪 Demostración de Autoscaling
+## 🧪 Prueba de Autoscaling (Automatizado)
 
-Una vez desplegado con Ansible, puedes probar el autoscaling:
+Hemos creado scripts automatizados para probar el autoscaling fácilmente:
 
-### 1. Generar carga al backend
+### Opción 1: Test Completo Automatizado ⭐ (Recomendado)
+
+Este script genera carga, monitorea el autoscaling y muestra estadísticas en tiempo real:
 
 ```bash
-# Usar el script de load testing
-./load-testing/simple-load-test.sh
+./load-testing/test-autoscaling.sh
+```
 
-# O crear generadores de carga manualmente
-for i in {1..5}; do
-  kubectl run load-gen-$i --image=busybox --restart=Never -n todoapp -- \
-    /bin/sh -c "while true; do wget -q -O- http://todoapp-backend:5001/stress?duration=40000; done"
+**¿Qué hace?**
+- ✅ Muestra estado inicial (pods, nodos, HPA)
+- ✅ Crea 8 generadores de carga automáticamente
+- ✅ Monitorea pods, nodos y HPA cada 10 segundos
+- ✅ Muestra métricas en tiempo real con colores
+- ✅ Detecta cuando se añaden pods y nodos
+- ✅ Opción para limpiar generadores al final
+
+**Personalizar:**
+```bash
+# Más carga = más pods/nodos
+LOAD_GENERATORS=12 ./load-testing/test-autoscaling.sh
+
+# Test más largo
+TEST_DURATION=900 ./load-testing/test-autoscaling.sh  # 15 minutos
+```
+
+### Opción 2: Dashboard de Monitoreo
+
+Para ver el estado en tiempo real (ejecuta en terminal separada):
+
+```bash
+./load-testing/monitor-autoscaling-dashboard.sh
+```
+
+**Características:**
+- 📊 Dashboard visual con colores
+- 🔄 Actualización cada 3 segundos
+- 📈 Métricas de HPA (CPU, Memory)
+- 🖥️ Estado de nodos
+- 🔥 Detecta load generators activos
+
+### Opción 3: Manual
+
+```bash
+# 1. Generar carga
+for i in {1..8}; do
+  kubectl run load-generator-$i --image=busybox --restart=Never -n todoapp \
+    --labels="role=load-generator" \
+    -- /bin/sh -c "while true; do wget -q -O- http://todoapp-backend:5001/stress?duration=30000; done"
 done
+
+# 2. Monitorear (terminal separada)
+./load-testing/monitor-autoscaling-dashboard.sh
+
+# 3. Limpiar
+kubectl delete pod -n todoapp -l role=load-generator
 ```
 
-### 2. Monitorear el autoscaling
-
-```bash
-# Opción 1: Usar el script de monitoreo
-./load-testing/monitor-autoscaling.sh
-
-# Opción 2: Monitorear manualmente (3 terminales)
-# Terminal 1 - HPA
-watch -n 2 'kubectl get hpa -n todoapp'
-
-# Terminal 2 - Nodos
-watch -n 5 'kubectl get nodes'
-
-# Terminal 3 - Pods
-watch -n 2 'kubectl get pods -n todoapp'
-```
-
-### 3. Comportamiento esperado
+### Comportamiento Esperado
 
 ```
-T=0min:  2 pods backend, 2 nodos, CPU ~5%
-         ↓ Generar carga
-T=1min:  CPU → 85%, HPA escala → 4 pods
-T=2min:  HPA escala → 6 pods
-T=3min:  HPA escala → 8 pods
-T=4min:  HPA escala → 10 pods (máximo configurado)
-T=5min:  Algunos pods → "Pending" (no hay recursos)
-T=7min:  Cluster Autoscaler añade nodo #3
-         Todos los pods → "Running"
-T=10min: Si sigue la carga, puede añadir más nodos
+T=0min:  🟢 Estado inicial
+         - 2 pods backend, 2 nodos, CPU ~5%
+
+T=0min:  🔴 Iniciar carga (8 generadores)
+         
+T=1min:  📈 HPA detecta CPU alto (>50%)
+         - Backend: 2 → 4 pods
+         
+T=2-3min: 📈 HPA escala continuamente
+         - Backend: 4 → 6 → 8 → 10 pods
+         
+T=4-5min: ⚠️  Pods "Pending"
+         - 10 pods (máximo HPA)
+         - No hay recursos en nodos
+
+T=7min:  🖥️  Cluster Autoscaler añade nodo #3
+         - Pods "Pending" → "Running"
+         
+──────────────────────────────────────────
+
+T=X:     🔵 Detener carga
+         
+T+2min:  📉 HPA reduce gradualmente
+         - 10 → 8 → 6 → 4 → 2 pods
+         
+T+10min: 🖥️  Cluster Autoscaler elimina nodos
+         - Vuelve a 2 nodos (mínimo)
 ```
 
-### 4. Limpiar la carga
-
-```bash
-# Eliminar generadores de carga
-kubectl delete pod -n todoapp -l run=load-gen
-
-# Observar scale-down automático (5-10 minutos)
-# - HPA reduce pods gradualmente
-# - Cluster Autoscaler elimina nodos infrautilizados
-```
+**📖 Más detalles:** `docs/05-MANUAL-AUTOSCALING-TEST.md`
 
 **� Documentación detallada:** Ver `docs/05-MANUAL-AUTOSCALING-TEST.md`
 

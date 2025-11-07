@@ -96,12 +96,38 @@ jobs:
       - name: Test frontend Docker image
         run: |
           docker run -d --name frontend-test \
-            -p 3000:80 \
+            -p 3000:3000 \
             todoapp-frontend:${{ github.sha }}
+          
+          echo "Waiting for container to be ready..."
+          sleep 5
+          
+          echo "Checking container status..."
+          docker ps -a | grep frontend-test
+          
+          echo "Container logs:"
+          docker logs frontend-test
+          
+          echo "Waiting additional time..."
           sleep 10
-          curl -f http://localhost:3000 || exit 1
+          
+          echo "Testing connection..."
+          for i in {1..5}; do
+            if curl -f http://localhost:3000; then
+              echo "✅ Frontend is accessible"
+              docker stop frontend-test
+              docker rm frontend-test
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying..."
+            sleep 2
+          done
+          
+          echo "❌ Frontend test failed"
+          docker logs frontend-test
           docker stop frontend-test
           docker rm frontend-test
+          exit 1
 
   # Job 3: Validate Kubernetes manifests
   k8s-validation:

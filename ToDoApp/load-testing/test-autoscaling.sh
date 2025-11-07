@@ -8,6 +8,7 @@ set -e
 # Configuración
 NAMESPACE="${NAMESPACE:-todoapp}"
 SERVICE_NAME="${SERVICE_NAME:-todoapp-backend}"
+BACKEND_LABEL="${BACKEND_LABEL:-app.kubernetes.io/component=backend}"
 LOAD_GENERATORS="${LOAD_GENERATORS:-15}"
 STRESS_DURATION="${STRESS_DURATION:-30000}"
 TEST_DURATION="${TEST_DURATION:-600}" # 10 minutos por defecto
@@ -66,22 +67,39 @@ if ! kubectl get namespace $NAMESPACE &> /dev/null; then
     exit 1
 fi
 
+# Verificar que el servicio existe
+if ! kubectl get service $SERVICE_NAME -n $NAMESPACE &> /dev/null; then
+    print_error "El servicio '$SERVICE_NAME' no existe en el namespace '$NAMESPACE'"
+    print_info "Servicios disponibles:"
+    kubectl get services -n $NAMESPACE
+    exit 1
+fi
+
+# Verificar que hay pods backend
+BACKEND_PODS=$(kubectl get pods -n $NAMESPACE -l $BACKEND_LABEL --no-headers 2>/dev/null | wc -l)
+if [ "$BACKEND_PODS" -eq 0 ]; then
+    print_error "No se encontraron pods backend con el label '$BACKEND_LABEL'"
+    print_info "Pods disponibles en el namespace:"
+    kubectl get pods -n $NAMESPACE --show-labels
+    exit 1
+fi
+
 # Mostrar estado inicial
 print_header "ESTADO INICIAL"
 echo ""
 echo -e "${MAGENTA}📊 Pods actuales:${NC}"
-kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=todoapp --no-headers | wc -l
+kubectl get pods -n $NAMESPACE -l $BACKEND_LABEL --no-headers 2>/dev/null | wc -l
 echo ""
 echo -e "${MAGENTA}🖥️  Nodos actuales:${NC}"
-kubectl get nodes --no-headers | wc -l
+kubectl get nodes --no-headers 2>/dev/null | wc -l
 echo ""
 echo -e "${MAGENTA}📈 HPA Status:${NC}"
-kubectl get hpa -n $NAMESPACE
+kubectl get hpa -n $NAMESPACE 2>/dev/null || echo "No HPA found"
 echo ""
 
 # Guardar estado inicial
-INITIAL_PODS=$(kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=todoapp --no-headers | wc -l)
-INITIAL_NODES=$(kubectl get nodes --no-headers | wc -l)
+INITIAL_PODS=$(kubectl get pods -n $NAMESPACE -l $BACKEND_LABEL --no-headers 2>/dev/null | wc -l)
+INITIAL_NODES=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
 
 print_info "Estado inicial guardado: $INITIAL_PODS pods, $INITIAL_NODES nodos"
 echo ""
@@ -94,14 +112,23 @@ echo ""
 
 print_status "Creando $LOAD_GENERATORS generadores de carga..."
 for i in $(seq 1 $LOAD_GENERATORS); do
+    # Eliminar generador anterior si existe
+    kubectl delete pod load-generator-$i -n $NAMESPACE --ignore-not-found=true --grace-period=0 --force &> /dev/null || true
+    
     kubectl run load-generator-$i \
         --image=busybox \
         --restart=Never \
         -n $NAMESPACE \
         --labels="role=load-generator" \
-        -- /bin/sh -c "while true; do wget -q -O- http://$SERVICE_NAME:5001/stress?duration=$STRESS_DURATION 2>/dev/null; done" \
-        2>/dev/null || true
-    echo -e "${GREEN}  ✓${NC} Generador $i creado"
+        --command -- /bin/sh -c "while true; do wget -q -O- http://$SERVICE_NAME:5001/stress?duration=$STRESS_DURATION 2>/dev/null || sleep 1; done" \
+        &> /dev/null
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}  ✓${NC} Generador $i creado"
+    else
+        echo -e "${RED}  ✗${NC} Error creando generador $i"
+    fi
+    sleep 0.5
 done
 
 echo ""
@@ -112,12 +139,12 @@ echo ""
 # Función para mostrar estadísticas
 show_stats() {
     local timestamp=$(date +"%H:%M:%S")
-    local pods=$(kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=todoapp --no-headers 2>/dev/null | wc -l)
+    local pods=$(kubectl get pods -n $NAMESPACE -l $BACKEND_LABEL --no-headers 2>/dev/null | wc -l)
     local nodes=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
-    local pending_pods=$(kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=todoapp --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
+    local pending_pods=$(kubectl get pods -n $NAMESPACE -l $BACKEND_LABEL --field-selector=status.phase=Pending --no-headers 2>/dev/null | wc -l)
     
-    # Obtener métricas de HPA
-    local hpa_info=$(kubectl get hpa -n $NAMESPACE -o custom-columns=NAME:.metadata.name,CURRENT:.status.currentMetrics[0].resource.current.averageUtilization,TARGET:.spec.metrics[0].resource.target.averageUtilization,REPLICAS:.status.currentReplicas 2>/dev/null | tail -n +2)
+    # Obtener métricas de HPA de forma más robusta
+    local hpa_output=$(kubectl get hpa -n $NAMESPACE 2>/dev/null)
     
     echo ""
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -125,10 +152,14 @@ show_stats() {
     echo -e "${MAGENTA}📊 Pods totales:${NC} $pods (Inicial: $INITIAL_PODS) | ${YELLOW}Pending:${NC} $pending_pods"
     echo -e "${MAGENTA}🖥️  Nodos:${NC} $nodes (Inicial: $INITIAL_NODES)"
     echo ""
-    echo -e "${MAGENTA}📈 HPA Status:${NC}"
-    echo "$hpa_info" | while read line; do
-        echo "   $line"
-    done
+    if [ -n "$hpa_output" ]; then
+        echo -e "${MAGENTA}📈 HPA Status:${NC}"
+        echo "$hpa_output" | tail -n +2 | while read line; do
+            echo "   $line"
+        done
+    else
+        echo -e "${YELLOW}⚠ No HPA found${NC}"
+    fi
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 }
 
@@ -173,8 +204,8 @@ echo ""
 print_header "ESTADÍSTICAS FINALES"
 show_stats
 
-FINAL_PODS=$(kubectl get pods -n $NAMESPACE -l app.kubernetes.io/name=todoapp --no-headers | wc -l)
-FINAL_NODES=$(kubectl get nodes --no-headers | wc -l)
+FINAL_PODS=$(kubectl get pods -n $NAMESPACE -l $BACKEND_LABEL --no-headers 2>/dev/null | wc -l)
+FINAL_NODES=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
 
 echo ""
 print_info "Cambios detectados:"

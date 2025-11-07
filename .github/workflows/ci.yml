@@ -98,7 +98,7 @@ jobs:
           docker run -d --name frontend-test \
             -p 3000:80 \
             todoapp-frontend:${{ github.sha }}
-          sleep 5
+          sleep 10
           curl -f http://localhost:3000 || exit 1
           docker stop frontend-test
           docker rm frontend-test

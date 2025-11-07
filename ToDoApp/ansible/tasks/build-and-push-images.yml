@@ -34,13 +34,21 @@
 - name: Push backend image to GCR
   command: docker push {{ backend_image }}
   changed_when: true
+  failed_when: false
+  ignore_errors: true
+  register: backend_push
 
 - name: Push frontend image to GCR
   command: docker push {{ frontend_image }}
   changed_when: true
+  failed_when: false
+  ignore_errors: true
+  register: frontend_push
 
 - name: Display pushed images
-  debug:
+  ansible.builtin.debug:
     msg:
       - "Backend Image: {{ backend_image }}"
       - "Frontend Image: {{ frontend_image }}"
+      - "Backend Push: {{ 'Success' if backend_push.rc == 0 else 'Failed (check permissions)' }}"
+      - "Frontend Push: {{ 'Success' if frontend_push.rc == 0 else 'Failed (check permissions)' }}"

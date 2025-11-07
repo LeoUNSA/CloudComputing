@@ -26,7 +26,7 @@ jobs:
 
       - name: Install backend dependencies
         working-directory: ToDoApp/backend
-        run: npm ci
+        run: npm install
 
       - name: Run backend linter (if configured)
         working-directory: ToDoApp/backend
@@ -70,7 +70,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: ToDoApp/frontend
-        run: npm ci
+        run: npm install
 
       - name: Run frontend linter (if configured)
         working-directory: ToDoApp/frontend
